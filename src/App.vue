@@ -371,7 +371,7 @@ const refreshData = async () => {
           x = ((a.lng - 121.0) / 2.0) * 160;
           y = ((a.lat - 24.0) / 2.0) * 160;
           
-          const CLAMP_BOUND = 220;
+          const CLAMP_BOUND = 200;
           x = Math.max(-CLAMP_BOUND, Math.min(CLAMP_BOUND, x));
           y = Math.max(-CLAMP_BOUND, Math.min(CLAMP_BOUND, y));
         }
@@ -384,14 +384,22 @@ const refreshData = async () => {
       });
 
       const weaponNodes = weaponsList.map(w => {
+        let lat = w.base_lat;
+        let lng = w.base_lng;
+        // If it's a cyber weapon with 0 coordinates, give it a default red side position
+        if (lat === 0 || lng === 0) {
+          lat = 24.2;
+          lng = 118.5;
+        }
+
         let x = undefined;
         let y = undefined;
-        if (w.base_lat !== null && w.base_lat !== undefined && w.base_lat !== 0 &&
-            w.base_lng !== null && w.base_lng !== undefined && w.base_lng !== 0) {
-          x = ((w.base_lng - 121.0) / 2.0) * 160;
-          y = ((w.base_lat - 24.0) / 2.0) * 160;
+        if (lat !== null && lat !== undefined && lat !== 0 &&
+            lng !== null && lng !== undefined && lng !== 0) {
+          x = ((lng - 121.0) / 2.0) * 160;
+          y = ((lat - 24.0) / 2.0) * 160;
           
-          const CLAMP_BOUND = 220;
+          const CLAMP_BOUND = 200;
           x = Math.max(-CLAMP_BOUND, Math.min(CLAMP_BOUND, x));
           y = Math.max(-CLAMP_BOUND, Math.min(CLAMP_BOUND, y));
         }
@@ -407,8 +415,8 @@ const refreshData = async () => {
           max_range: w.max_range,
           inventory: w.inventory,
           political_risk: w.political_risk,
-          lat: w.base_lat,
-          lng: w.base_lng,
+          lat: lat,
+          lng: lng,
           fx: x,
           fy: y,
           fz: -150
@@ -763,6 +771,7 @@ watch(currentView, () => {
     width: 100% !important;
     font-weight: bold;
     margin-top: 8px !important;
+    margin-left: 0 !important;
   }
   
   .time-slider-container {
@@ -946,5 +955,71 @@ watch(currentView, () => {
 }
 .el-timeline-item__content {
   color: #a0aec0;
+}
+
+// Element Plus Dark Theme Overrides
+.left-sidebar {
+  .el-select,
+  .el-input,
+  .el-input-number {
+    --el-fill-color-blank: #0a1128 !important;
+    --el-border-color: rgba(0, 225, 255, 0.25) !important;
+    --el-border-color-hover: #00e1ff !important;
+    --el-text-color-regular: #cbd5e1 !important;
+    --el-text-color-placeholder: #475569 !important;
+  }
+  
+  .el-input__wrapper,
+  .el-select__wrapper {
+    background-color: #0a1128 !important;
+    box-shadow: 0 0 0 1px rgba(0, 225, 255, 0.25) inset !important;
+    
+    .el-input__inner,
+    .el-select__placeholder,
+    .el-select__selected-item {
+      color: #cbd5e1 !important;
+    }
+  }
+  
+  .el-input__wrapper.is-focus,
+  .el-select__wrapper.is-focus {
+    box-shadow: 0 0 0 1px #00e1ff inset !important;
+  }
+
+  .el-input-number {
+    .el-input-number__increase,
+    .el-input-number__decrease {
+      background-color: #0b1836 !important;
+      border-color: rgba(0, 225, 255, 0.25) !important;
+      color: #cbd5e1 !important;
+      
+      &:hover {
+        color: #00e1ff !important;
+      }
+    }
+  }
+}
+
+.el-select__dropdown,
+.el-select-dropdown {
+  background-color: #0a1128 !important;
+  border: 1px solid rgba(0, 225, 255, 0.25) !important;
+  
+  .el-select-dropdown__item {
+    color: #cbd5e1 !important;
+    background-color: transparent !important;
+    
+    &.hover,
+    &:hover {
+      background-color: #0d1b40 !important;
+      color: #00e1ff !important;
+    }
+    
+    &.is-selected {
+      color: #00e1ff !important;
+      font-weight: bold;
+      background-color: #102a5c !important;
+    }
+  }
 }
 </style>

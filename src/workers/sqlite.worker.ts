@@ -31,10 +31,15 @@ async function initDb() {
 
     // 开启事务以加速建表过程
     db.exec('BEGIN TRANSACTION;');
-    for (const stmt of statements) {
-      db.exec(stmt);
+    try {
+      for (const stmt of statements) {
+        db.exec(stmt);
+      }
+      db.exec('COMMIT;');
+    } catch (e) {
+      try { db.exec('ROLLBACK;'); } catch (err) {}
+      throw e;
     }
-    db.exec('COMMIT;');
     
     console.log('Database tables successfully initialized.');
     postMessage({ type: 'INIT_SUCCESS' });
@@ -120,139 +125,154 @@ function autoAllocateWeapons(intensity: string, currentTime: number, scenarioId:
   }
 
   db.exec('BEGIN TRANSACTION;');
-  let engagementsCount = 0;
+  try {
+    // Delete any existing engagements at this tick to avoid UNIQUE constraint violation on replay/slider drag
+    db.exec({
+      sql: `DELETE FROM engagements WHERE action_time = ?`,
+      bind: [currentTime]
+    });
 
-  for (const asset of assets) {
-    // 找出与该资产相连的所有活动链路
-    const connectedLinks = activeWindows.filter(link => 
-      link.source_id === asset.id || link.target_id === asset.id
-    );
+    let engagementsCount = 0;
 
-    if (connectedLinks.length === 0) continue;
+    for (const asset of assets) {
+      // 找出与该资产相连的所有活动链路
+      const connectedLinks = activeWindows.filter(link => 
+        link.source_id === asset.id || link.target_id === asset.id
+      );
 
-    // 贪心匹配最适用的打击武器
-    let selectedWeapon: any = null;
-    let computedDistance = 0;
+      if (connectedLinks.length === 0) continue;
 
-    for (const weapon of allowedWeapons) {
-      if (weapon.inventory === 0) continue; // 弹药已耗尽
+      // 贪心匹配最适用的打击武器
+      let selectedWeapon: any = null;
+      let computedDistance = 0;
 
-      let dist = -1;
-      if (weapon.category !== 'CYBER') {
-        const assetLat = asset.lat !== null ? asset.lat : 24.5;
-        const assetLng = asset.lng !== null ? asset.lng : 121.5;
-        dist = calculateDistance(weapon.base_lat, weapon.base_lng, assetLat, assetLng);
-        
-        // 射程约束
-        if (weapon.max_range !== -1 && dist > weapon.max_range) {
-          continue;
+      for (const weapon of allowedWeapons) {
+        if (weapon.inventory === 0) continue; // 弹药已耗尽
+
+        let dist = -1;
+        if (weapon.category !== 'CYBER') {
+          const assetLat = asset.lat !== null ? asset.lat : 24.5;
+          const assetLng = asset.lng !== null ? asset.lng : 121.5;
+          dist = calculateDistance(weapon.base_lat, weapon.base_lng, assetLat, assetLng);
+          
+          // 射程约束
+          if (weapon.max_range !== -1 && dist > weapon.max_range) {
+            continue;
+          }
         }
+
+        selectedWeapon = weapon;
+        computedDistance = dist;
+        break; // 贪心背包分配
       }
 
-      selectedWeapon = weapon;
-      computedDistance = dist;
-      break; // 贪心背包分配
-    }
-
-    if (selectedWeapon) {
-      // 消耗武器库存
-      if (selectedWeapon.inventory > 0) {
-        selectedWeapon.inventory -= 1;
-        db.exec({
-          sql: `UPDATE weapons SET inventory = ? WHERE id = ?`,
-          bind: [selectedWeapon.inventory, selectedWeapon.id]
-        });
-      }
-
-      // 解算 CEMA 多域战物理衰减因子
-      // 1. 距离反比损耗
-      const d = computedDistance > 0 ? computedDistance : 50.0;
-      const attenuation_dist = 1 / (4 * Math.PI * Math.pow(d, 2));
-
-      // 2. 自由空间高程损耗
-      const alt = asset.alt || 0.1;
-      const attenuation_alt = 1 / (1 + Math.pow(alt / 100, 2));
-
-      // 3. 地形遮蔽损耗
-      const attenuation_terrain = asset.layer === 0 ? 0.75 : 1.0;
-
-      // 4. 多普勒频移损耗
-      const attenuation_vel = asset.layer === 2 ? 0.85 : 1.0;
-
-      // 5. 天线偏角折损
-      const attenuation_att = 0.90;
-
-      // 解算最终有效干信比 (J/S Ratio)
-      // 假定干扰开机基准功率为 3000W，蓝方通信基准功率为 0.05W
-      const P_jam = 3000;
-      const P_sig = 0.05;
-      const js = 10 * Math.log10((P_jam * attenuation_dist * attenuation_terrain * attenuation_alt * attenuation_vel * attenuation_att) / P_sig);
-      const final_js = Math.round(js * 100) / 100;
-
-      // 打击判定: 干信比超过接收机抗干扰等级为成功拦截
-      const threshold = asset.anti_jam_level || 50;
-      const isSuccessful = final_js >= threshold ? 1 : 0;
-
-      const engageId = `engage-${selectedWeapon.id}-${asset.id}-${currentTime}`;
-      const targetWindowId = connectedLinks[0].id;
-
-      // 写入交战日志表
-      db.exec({
-        sql: `
-          INSERT INTO engagements (id, plan_id, weapon_id, target_window_id, action_time, attenuation_dist, attenuation_terrain, attenuation_alt, attenuation_vel, attenuation_att, final_js_ratio, is_successful)
-          VALUES (?, 'plan-001', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-        bind: [
-          engageId, selectedWeapon.id, targetWindowId, currentTime,
-          attenuation_dist, attenuation_terrain, attenuation_alt,
-          attenuation_vel, attenuation_att, final_js, isSuccessful
-        ]
-      });
-
-      engagementsCount += 1;
-
-      // 判定成功：更新链路及资产状态
-      if (isSuccessful === 1) {
-        const newStatus = selectedWeapon.kill_type === 'HARD' ? 'DESTROYED' : 'JAMMED';
-        
-        // 更新受影响链路状态
-        db.exec({
-          sql: `
-            UPDATE communication_windows 
-            SET link_status = ? 
-            WHERE scenario_id = ? AND ? BETWEEN window_start AND window_end
-              AND (source_id = ? OR target_id = ?)
-          `,
-          bind: [newStatus, scenarioId, currentTime, asset.id, asset.id]
-        });
-
-        // 如果被硬物理摧毁，更新资产本身等级为 0
-        if (selectedWeapon.kill_type === 'HARD') {
+      if (selectedWeapon) {
+        // 消耗武器库存
+        if (selectedWeapon.inventory > 0) {
+          selectedWeapon.inventory -= 1;
           db.exec({
-            sql: `UPDATE assets SET anti_jam_level = 0, base_priority = 0 WHERE id = ?`,
-            bind: [asset.id]
+            sql: `UPDATE weapons SET inventory = ? WHERE id = ?`,
+            bind: [selectedWeapon.inventory, selectedWeapon.id]
           });
         }
 
-        // 累计 tactical_plans 效能和开支
-        const delayAdded = selectedWeapon.kill_type === 'HARD' ? 480 : 120;
-        const destroyedAdded = selectedWeapon.kill_type === 'HARD' ? 1 : 0;
+        // 解算 CEMA 多域战物理衰减因子
+        // 1. 距离反比损耗
+        const d = computedDistance > 0 ? computedDistance : 50.0;
+        const attenuation_dist = 1 / (4 * Math.PI * Math.pow(d, 2));
+
+        // 2. 自由空间高程损耗
+        const alt = asset.alt || 0.1;
+        const attenuation_alt = 1 / (1 + Math.pow(alt / 100, 2));
+
+        // 3. 地形遮蔽损耗
+        const attenuation_terrain = asset.layer === 0 ? 0.75 : 1.0;
+
+        // 4. 多普勒频移损耗
+        const attenuation_vel = asset.layer === 2 ? 0.85 : 1.0;
+
+        // 5. 天线偏角折损
+        const attenuation_att = 0.90;
+
+        // 解算最终有效干信比 (J/S Ratio)
+        // 假定干扰开机基准功率为 3000W，蓝方通信基准功率为 0.05W
+        const P_jam = 3000;
+        const P_sig = 0.05;
+        const js = 10 * Math.log10((P_jam * attenuation_dist * attenuation_terrain * attenuation_alt * attenuation_vel * attenuation_att) / P_sig);
+        const final_js = Math.round(js * 100) / 100;
+
+        // 打击判定: 干信比超过接收机抗干扰等级为成功拦截
+        const threshold = asset.anti_jam_level || 50;
+        const isSuccessful = final_js >= threshold ? 1 : 0;
+
+        const engageId = `engage-${selectedWeapon.id}-${asset.id}-${currentTime}`;
+        const targetWindowId = connectedLinks[0].id;
+
+        // 写入交战日志表
         db.exec({
           sql: `
-            UPDATE tactical_plans 
-            SET total_cost = total_cost + ?,
-                total_delay_achieved = total_delay_achieved + ?,
-                nodes_destroyed = nodes_destroyed + ?
-            WHERE id = 'plan-001'
+            INSERT INTO engagements (id, plan_id, weapon_id, target_window_id, action_time, attenuation_dist, attenuation_terrain, attenuation_alt, attenuation_vel, attenuation_att, final_js_ratio, is_successful)
+            VALUES (?, 'plan-001', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
-          bind: [selectedWeapon.action_cost, delayAdded, destroyedAdded]
+          bind: [
+            engageId, selectedWeapon.id, targetWindowId, currentTime,
+            attenuation_dist, attenuation_terrain, attenuation_alt,
+            attenuation_vel, attenuation_att, final_js, isSuccessful
+          ]
         });
+
+        engagementsCount += 1;
+
+        // 判定成功：更新链路及资产状态
+        if (isSuccessful === 1) {
+          const newStatus = selectedWeapon.kill_type === 'HARD' ? 'DESTROYED' : 'JAMMED';
+          
+          // 更新受影响链路状态
+          db.exec({
+            sql: `
+              UPDATE communication_windows 
+              SET link_status = ? 
+              WHERE scenario_id = ? AND ? BETWEEN window_start AND window_end
+                AND (source_id = ? OR target_id = ?)
+            `,
+            bind: [newStatus, scenarioId, currentTime, asset.id, asset.id]
+          });
+
+          // 如果被硬物理摧毁，更新资产本身等级为 0
+          if (selectedWeapon.kill_type === 'HARD') {
+            db.exec({
+              sql: `UPDATE assets SET anti_jam_level = 0, base_priority = 0 WHERE id = ?`,
+              bind: [asset.id]
+            });
+          }
+
+          // 累计 tactical_plans 效能和开支
+          const delayAdded = selectedWeapon.kill_type === 'HARD' ? 480 : 120;
+          const destroyedAdded = selectedWeapon.kill_type === 'HARD' ? 1 : 0;
+          db.exec({
+            sql: `
+              UPDATE tactical_plans 
+              SET total_cost = total_cost + ?,
+                  total_delay_achieved = total_delay_achieved + ?,
+                  nodes_destroyed = nodes_destroyed + ?
+              WHERE id = 'plan-001'
+            `,
+            bind: [selectedWeapon.action_cost, delayAdded, destroyedAdded]
+          });
+        }
       }
     }
-  }
 
-  db.exec('COMMIT;');
-  return { engagements_created: engagementsCount };
+    db.exec('COMMIT;');
+    return { engagements_created: engagementsCount };
+  } catch (error) {
+    try {
+      db.exec('ROLLBACK;');
+    } catch (e) {
+      console.error('Weapon Allocation Transaction Rollback Failed:', e);
+    }
+    throw error;
+  }
 }
 
 // 监听主线程的消息
@@ -324,74 +344,77 @@ addEventListener('message', (event: MessageEvent) => {
       }).filter(Boolean) as any[];
 
       db.exec('BEGIN TRANSACTION;');
+      try {
+        for (let t = start_time; t <= end_time; t += time_step_seconds) {
+          const date = new Date(t * 1000);
+          const gmst = satellite.gstime(date);
 
-      for (let t = start_time; t <= end_time; t += time_step_seconds) {
-        const date = new Date(t * 1000);
-        const gmst = satellite.gstime(date);
+          for (const sat of satrecs) {
+            const posAndVel = satellite.propagate(sat.satrec, date);
+            const posEci = posAndVel.position;
 
-        for (const sat of satrecs) {
-          const posAndVel = satellite.propagate(sat.satrec, date);
-          const posEci = posAndVel.position;
+            if (!posEci || typeof posEci === 'boolean') {
+              continue;
+            }
 
-          if (!posEci || typeof posEci === 'boolean') {
-            continue;
-          }
+            const posEcf = satellite.eciToEcf(posEci, gmst);
 
-          const posEcf = satellite.eciToEcf(posEci, gmst);
+            for (const station of stations) {
+              const observerGeodetic = {
+                latitude: satellite.degreesToRadians(station.lat),
+                longitude: satellite.degreesToRadians(station.lng),
+                height: station.alt || 0 
+              };
 
-          for (const station of stations) {
-            const observerGeodetic = {
-              latitude: satellite.degreesToRadians(station.lat),
-              longitude: satellite.degreesToRadians(station.lng),
-              height: station.alt || 0 
-            };
+              const observerEcf = satellite.geodeticToEcf(observerGeodetic);
+              const lookAngles = satellite.ecfToLookAngles(observerEcf, posEcf);
+              const elevation = satellite.radiansToDegrees(lookAngles.elevation);
 
-            const observerEcf = satellite.geodeticToEcf(observerGeodetic);
-            const lookAngles = satellite.ecfToLookAngles(observerEcf, posEcf);
-            const elevation = satellite.radiansToDegrees(lookAngles.elevation);
+              const key = `${sat.id}-${station.id}`;
+              const mask = station.terrain_mask_angle || 10.0;
+              const isVisible = elevation >= mask;
 
-            const key = `${sat.id}-${station.id}`;
-            const mask = station.terrain_mask_angle || 10.0;
-            const isVisible = elevation >= mask;
-
-            if (isVisible) {
-              if (!activeWindows.has(key)) {
-                activeWindows.set(key, t);
-              }
-            } else {
-              if (activeWindows.has(key)) {
-                const start = activeWindows.get(key)!;
-                activeWindows.delete(key);
-                const windowId = `win-${sat.id}-${station.id}-${start}`;
-                db.exec({
-                  sql: `
-                    INSERT INTO communication_windows (id, scenario_id, source_id, target_id, window_start, window_end, routing_converge_delay, link_status)
-                    VALUES (?, ?, ?, ?, ?, ?, 30, 'TRANSMITTING')
-                  `,
-                  bind: [windowId, scenarioId, sat.id, station.id, start, t]
-                });
+              if (isVisible) {
+                if (!activeWindows.has(key)) {
+                  activeWindows.set(key, t);
+                }
+              } else {
+                if (activeWindows.has(key)) {
+                  const start = activeWindows.get(key)!;
+                  activeWindows.delete(key);
+                  const windowId = `win-${sat.id}-${station.id}-${start}`;
+                  db.exec({
+                    sql: `
+                      INSERT INTO communication_windows (id, scenario_id, source_id, target_id, window_start, window_end, routing_converge_delay, link_status)
+                      VALUES (?, ?, ?, ?, ?, ?, 30, 'TRANSMITTING')
+                    `,
+                    bind: [windowId, scenarioId, sat.id, station.id, start, t]
+                  });
+                }
               }
             }
           }
         }
-      }
 
-      for (const [key, start] of activeWindows.entries()) {
-        const [satId, stationId] = key.split('-');
-        const windowId = `win-${satId}-${stationId}-${start}`;
-        db.exec({
-          sql: `
-            INSERT INTO communication_windows (id, scenario_id, source_id, target_id, window_start, window_end, routing_converge_delay, link_status)
-            VALUES (?, ?, ?, ?, ?, ?, 30, 'TRANSMITTING')
-          `,
-          bind: [windowId, scenarioId, satId, stationId, start, end_time]
-        });
-      }
+        for (const [key, start] of activeWindows.entries()) {
+          const [satId, stationId] = key.split('-');
+          const windowId = `win-${satId}-${stationId}-${start}`;
+          db.exec({
+            sql: `
+              INSERT INTO communication_windows (id, scenario_id, source_id, target_id, window_start, window_end, routing_converge_delay, link_status)
+              VALUES (?, ?, ?, ?, ?, ?, 30, 'TRANSMITTING')
+            `,
+            bind: [windowId, scenarioId, satId, stationId, start, end_time]
+          });
+        }
 
-      db.exec('COMMIT;');
+        db.exec('COMMIT;');
+      } catch (innerError) {
+        try { db.exec('ROLLBACK;'); } catch (e) {}
+        throw innerError;
+      }
       postMessage({ id, type: 'SUCCESS', message: '轨道视算计算完成' });
     } catch (error: any) {
-      db.exec('ROLLBACK;');
       console.error('Calculation Error:', error);
       postMessage({ id, type: 'ERROR', error: error.message || String(error) });
     }
@@ -413,32 +436,36 @@ addEventListener('message', (event: MessageEvent) => {
       });
 
       db.exec('BEGIN TRANSACTION;');
-      for (const sat of satellites) {
-        try {
-          const lines = sat.tle_data.split(/\r?\n|\\n/).map((l: string) => l.trim()).filter((l: string) => l.length > 0);
-          if (lines.length < 2) continue;
-          const satrec = satellite.twoline2satrec(lines[0], lines[1]);
-          const posAndVel = satellite.propagate(satrec, date);
-          const posEci = posAndVel.position;
+      try {
+        for (const sat of satellites) {
+          try {
+            const lines = sat.tle_data.split(/\r?\n|\\n/).map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+            if (lines.length < 2) continue;
+            const satrec = satellite.twoline2satrec(lines[0], lines[1]);
+            const posAndVel = satellite.propagate(satrec, date);
+            const posEci = posAndVel.position;
 
-          if (posEci && typeof posEci !== 'boolean') {
-            const positionGeodetic = satellite.eciToGeodetic(posEci, gmst);
-            const lat = satellite.radiansToDegrees(positionGeodetic.latitude);
-            const lng = satellite.radiansToDegrees(positionGeodetic.longitude);
-            
-            db.exec({
-              sql: `UPDATE assets SET lat = ?, lng = ? WHERE id = ?`,
-              bind: [lat, lng, sat.id]
-            });
+            if (posEci && typeof posEci !== 'boolean') {
+              const positionGeodetic = satellite.eciToGeodetic(posEci, gmst);
+              const lat = satellite.radiansToDegrees(positionGeodetic.latitude);
+              const lng = satellite.radiansToDegrees(positionGeodetic.longitude);
+              
+              db.exec({
+                sql: `UPDATE assets SET lat = ?, lng = ? WHERE id = ?`,
+                bind: [lat, lng, sat.id]
+              });
+            }
+          } catch (e) {
+            console.error(`Error updating position for ${sat.id}:`, e);
           }
-        } catch (e) {
-          console.error(`Error updating position for ${sat.id}:`, e);
         }
+        db.exec('COMMIT;');
+      } catch (innerError) {
+        try { db.exec('ROLLBACK;'); } catch (e) {}
+        throw innerError;
       }
-      db.exec('COMMIT;');
       postMessage({ id, type: 'SUCCESS' });
     } catch (error: any) {
-      db.exec('ROLLBACK;');
       console.error('Update Satellite Positions Error:', error);
       postMessage({ id, type: 'ERROR', error: error.message || String(error) });
     }
