@@ -70,7 +70,7 @@ class SQLiteClient {
   /**
    * 发送指令到 Web Worker
    */
-  private send<T>(type: 'QUERY' | 'EXEC' | 'CALCULATE_WINDOWS' | 'AUTO_ALLOCATE_WEAPONS', sql: string, params?: any[]): Promise<T> {
+  private send<T>(type: 'QUERY' | 'EXEC' | 'CALCULATE_WINDOWS' | 'AUTO_ALLOCATE_WEAPONS' | 'UPDATE_SATELLITE_POSITIONS', sql: string, params?: any[]): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const id = Math.random().toString(36).substring(2, 9);
       this.pendingQueries.set(id, { resolve, reject });
@@ -97,6 +97,13 @@ class SQLiteClient {
    */
   public calculateWindows(scenarioId: string): Promise<{ message: string }> {
     return this.send<{ message: string }>('CALCULATE_WINDOWS', '', [scenarioId]);
+  }
+
+  /**
+   * 更新卫星在特定时间下的经纬度坐标
+   */
+  public updateSatellitePositions(currentTime: number): Promise<void> {
+    return this.send<void>('UPDATE_SATELLITE_POSITIONS', '', [currentTime]);
   }
 
   /**

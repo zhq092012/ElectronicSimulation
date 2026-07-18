@@ -19,12 +19,16 @@ const emit = defineEmits<{
 
 const container = ref<HTMLDivElement | null>(null);
 let Graph: any = null;
+let resizeObserver: ResizeObserver | null = null;
 
 onMounted(() => {
   if (!container.value) return;
 
   Graph = (ForceGraph3D as any)()(container.value)
-    .graphData({ nodes: props.nodes, links: props.links })
+    .graphData({ 
+      nodes: JSON.parse(JSON.stringify(props.nodes)), 
+      links: JSON.parse(JSON.stringify(props.links)) 
+    })
     .backgroundColor('rgba(8, 12, 22, 0.0)')
     .showNavInfo(false)
     .nodeLabel(() => '') // We use SpriteText instead of native tooltip for always-on labels
@@ -32,11 +36,13 @@ onMounted(() => {
       if (link.link_status === 'TRANSMITTING') return 'rgba(0, 102, 255, 0.6)';
       if (link.link_status === 'JAMMED') return 'rgba(234, 179, 8, 0.6)';
       if (link.link_status === 'DESTROYED') return 'rgba(0, 0, 0, 0)';
+      if (link.link_status === 'ENGAGEMENT') return 'rgba(255, 42, 95, 0.85)';
       return 'rgba(107, 114, 128, 0.25)';
     })
     .linkWidth((link: any) => {
       if (link.link_status === 'TRANSMITTING') return 2.0;
       if (link.link_status === 'JAMMED') return 1.5;
+      if (link.link_status === 'ENGAGEMENT') return 2.5;
       return 0.5;
     })
     .linkMaterial((link: any) => {
@@ -54,22 +60,31 @@ onMounted(() => {
           transparent: true,
           opacity: 0
         });
+      } else if (link.link_status === 'ENGAGEMENT') {
+        return new THREE.LineBasicMaterial({
+          color: 0xff2a5f,
+          transparent: true,
+          opacity: 0.9
+        });
       }
       return false; // Use default material
     })
     .linkDirectionalParticles((link: any) => {
       if (link.link_status === 'TRANSMITTING') return 3;
       if (link.link_status === 'JAMMED') return 1;
+      if (link.link_status === 'ENGAGEMENT') return 4;
       return 0;
     })
     .linkDirectionalParticleColor((link: any) => {
       if (link.link_status === 'TRANSMITTING') return '#00e1ff';
       if (link.link_status === 'JAMMED') return '#eab308';
+      if (link.link_status === 'ENGAGEMENT') return '#ff2a5f';
       return '#4b5563';
     })
     .linkDirectionalParticleWidth(2.5)
     .linkDirectionalParticleSpeed((link: any) => {
       if (link.link_status === 'JAMMED') return 0.003;
+      if (link.link_status === 'ENGAGEMENT') return 0.016;
       return 0.012;
     })
     .onNodeClick((node: any) => {
@@ -83,15 +98,15 @@ onMounted(() => {
     const data = Graph.graphData();
     if (!data || !data.nodes) return;
     data.nodes.forEach((node: any) => {
-      const layer = node.layer !== undefined ? node.layer : 0;
-      node.fz = layer * 150 - 150;
-      
-      // Bounding Box to prevent nodes from flying off
-      const BOUND = 240;
-      if (node.x > BOUND) { node.x = BOUND; node.vx = 0; }
-      if (node.x < -BOUND) { node.x = -BOUND; node.vx = 0; }
-      if (node.y > BOUND) { node.y = BOUND; node.vy = 0; }
-      if (node.y < -BOUND) { node.y = -BOUND; node.vy = 0; }
+      if (node.fz !== undefined && node.fz !== null) {
+        node.z = node.fz;
+      }
+      if (node.fx !== undefined && node.fx !== null) {
+        node.x = node.fx;
+      }
+      if (node.fy !== undefined && node.fy !== null) {
+        node.y = node.fy;
+      }
     });
   });
 
@@ -184,24 +199,38 @@ onMounted(() => {
     // Position camera to look at the center from an angle
     Graph.cameraPosition({ x: 0, y: -450, z: 250 }, { x: 0, y: 0, z: 0 }, 1000);
     
-    // Restrict vertical rotation to keep the 3-layer view clean (turntable rotation)
-    // 0 is top-down (looking along Z), Math.PI/2 is looking horizontally.
-    // We lock it between ~60 to ~70 degrees tilt.
-    controls.minPolarAngle = 1.0; 
-    controls.maxPolarAngle = 1.3;
-    controls.enablePan = false; // Prevent panning away from wargame area
+    // Enable free rotation and panning
+    controls.enablePan = true;
     controls.update();
   }
+
+  // ResizeObserver to automatically fit the container size
+  resizeObserver = new ResizeObserver((entries) => {
+    for (let entry of entries) {
+      const { width, height } = entry.contentRect;
+      if (Graph) {
+        Graph.width(width);
+        Graph.height(height);
+      }
+    }
+  });
+  resizeObserver.observe(container.value);
 });
 
 // Watch for data changes
 watch(() => [props.nodes, props.links], ([newNodes, newLinks]) => {
   if (Graph) {
-    Graph.graphData({ nodes: newNodes, links: newLinks });
+    const clonedNodes = JSON.parse(JSON.stringify(newNodes));
+    const clonedLinks = JSON.parse(JSON.stringify(newLinks));
+    Graph.graphData({ nodes: clonedNodes, links: clonedLinks });
   }
 }, { deep: true });
 
 onBeforeUnmount(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
   if (Graph && container.value) {
     container.value.innerHTML = '';
     Graph = null;

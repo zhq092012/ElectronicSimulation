@@ -398,6 +398,53 @@ addEventListener('message', (event: MessageEvent) => {
     return;
   }
 
+  // 新增：更新卫星位置计算
+  if (type === 'UPDATE_SATELLITE_POSITIONS') {
+    try {
+      const currentTime = params[0];
+      const date = new Date(currentTime * 1000);
+      const gmst = satellite.gstime(date);
+
+      const satellites: any[] = [];
+      db.exec({
+        sql: `SELECT id, tle_data FROM assets WHERE layer = 2 AND tle_data IS NOT NULL`,
+        rowMode: 'object',
+        callback: (row: any) => { satellites.push(row); }
+      });
+
+      db.exec('BEGIN TRANSACTION;');
+      for (const sat of satellites) {
+        try {
+          const lines = sat.tle_data.split(/\r?\n|\\n/).map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+          if (lines.length < 2) continue;
+          const satrec = satellite.twoline2satrec(lines[0], lines[1]);
+          const posAndVel = satellite.propagate(satrec, date);
+          const posEci = posAndVel.position;
+
+          if (posEci && typeof posEci !== 'boolean') {
+            const positionGeodetic = satellite.eciToGeodetic(posEci, gmst);
+            const lat = satellite.radiansToDegrees(positionGeodetic.latitude);
+            const lng = satellite.radiansToDegrees(positionGeodetic.longitude);
+            
+            db.exec({
+              sql: `UPDATE assets SET lat = ?, lng = ? WHERE id = ?`,
+              bind: [lat, lng, sat.id]
+            });
+          }
+        } catch (e) {
+          console.error(`Error updating position for ${sat.id}:`, e);
+        }
+      }
+      db.exec('COMMIT;');
+      postMessage({ id, type: 'SUCCESS' });
+    } catch (error: any) {
+      db.exec('ROLLBACK;');
+      console.error('Update Satellite Positions Error:', error);
+      postMessage({ id, type: 'ERROR', error: error.message || String(error) });
+    }
+    return;
+  }
+
   // 2. 自动武器分配交战判定特殊处理
   if (type === 'AUTO_ALLOCATE_WEAPONS') {
     try {

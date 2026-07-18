@@ -355,15 +355,97 @@ const refreshData = async () => {
       isScenarioLoaded.value = true;
       simTime.value = scen[0].start_time + simMinutes.value * 60;
       
+      // 1. Calculate and update satellite positions for this time tick
+      await sqliteClient.updateSatellitePositions(simTime.value);
+      
+      // 2. Fetch assets and weapons to merge as node objects
       const assetsList = await sqliteClient.query<any>("SELECT * FROM assets");
-      assets.value = assetsList;
+      const weaponsList = await sqliteClient.query<any>("SELECT * FROM weapons");
+      
 
-      // Only fetch active windows at this tick
+      const mappedAssets = assetsList.map(a => {
+        let x = undefined;
+        let y = undefined;
+        if (a.lat !== null && a.lat !== undefined && a.lat !== 0 &&
+            a.lng !== null && a.lng !== undefined && a.lng !== 0) {
+          x = ((a.lng - 121.0) / 2.0) * 160;
+          y = ((a.lat - 24.0) / 2.0) * 160;
+          
+          const CLAMP_BOUND = 220;
+          x = Math.max(-CLAMP_BOUND, Math.min(CLAMP_BOUND, x));
+          y = Math.max(-CLAMP_BOUND, Math.min(CLAMP_BOUND, y));
+        }
+        return {
+          ...a,
+          fx: x,
+          fy: y,
+          fz: a.layer * 150 - 150
+        };
+      });
+
+      const weaponNodes = weaponsList.map(w => {
+        let x = undefined;
+        let y = undefined;
+        if (w.base_lat !== null && w.base_lat !== undefined && w.base_lat !== 0 &&
+            w.base_lng !== null && w.base_lng !== undefined && w.base_lng !== 0) {
+          x = ((w.base_lng - 121.0) / 2.0) * 160;
+          y = ((w.base_lat - 24.0) / 2.0) * 160;
+          
+          const CLAMP_BOUND = 220;
+          x = Math.max(-CLAMP_BOUND, Math.min(CLAMP_BOUND, x));
+          y = Math.max(-CLAMP_BOUND, Math.min(CLAMP_BOUND, y));
+        }
+        return {
+          id: w.id,
+          name: w.name,
+          side: 'RED',
+          layer: 0, // Ground
+          asset_class: 'WEAPON',
+          category: w.category,
+          kill_type: w.kill_type,
+          action_cost: w.action_cost,
+          max_range: w.max_range,
+          inventory: w.inventory,
+          political_risk: w.political_risk,
+          lat: w.base_lat,
+          lng: w.base_lng,
+          fx: x,
+          fy: y,
+          fz: -150
+        };
+      });
+      
+      assets.value = [...mappedAssets, ...weaponNodes];
+
+      // 3. Fetch active communication windows at this tick
       const linksList = await sqliteClient.query<any>(`
         SELECT * FROM communication_windows 
         WHERE ? BETWEEN window_start AND window_end
       `, [simTime.value]);
-      links.value = linksList;
+      
+      const mappedLinks = linksList.map(l => ({
+        id: l.id,
+        scenario_id: l.scenario_id,
+        source: l.source_id,
+        target: l.target_id,
+        window_start: l.window_start,
+        window_end: l.window_end,
+        routing_converge_delay: l.routing_converge_delay,
+        link_status: l.link_status
+      }));
+
+      // 4. Fetch active engagements at this tick to draw links from weapons to targets
+      const engagementLinks = await sqliteClient.query<any>(`
+        SELECT e.weapon_id as source, a.id as target, 
+               'ENGAGEMENT' as link_status
+        FROM engagements e
+        JOIN communication_windows cw ON e.target_window_id = cw.id
+        JOIN assets a ON cw.target_id = a.id OR cw.source_id = a.id
+        WHERE e.action_time = ?
+        GROUP BY e.id
+      `, [simTime.value]);
+
+      links.value = [...mappedLinks, ...engagementLinks];
       
       const plans = await sqliteClient.query<any>("SELECT * FROM tactical_plans WHERE id = 'plan-001'");
       if (plans.length > 0) {
@@ -385,7 +467,9 @@ const loadMockScenario = async () => {
   addLog('初始化数据...', 'info');
   try {
     await seedMockData(sqliteClient);
-    addLog('导入基础场景数据完成！', 'success');
+    addLog('导入基础场景数据完成！正在进行初始轨道视算...', 'info');
+    await sqliteClient.calculateWindows('scen-001');
+    addLog('初始轨道视算完成！星地链路已生成。', 'success');
     simMinutes.value = 0;
     logs.value = [];
     await refreshData();
@@ -545,11 +629,12 @@ watch(currentView, () => {
 @import "./styles/theme.scss";
 
 .app-container {
-  min-height: 100vh;
+  height: 100vh;
   padding: 20px;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .app-header {
