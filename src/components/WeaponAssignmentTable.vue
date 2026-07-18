@@ -1,10 +1,10 @@
 <template>
-  <div class="w-full h-full flex flex-col min-h-0">
+  <div class="weapon-assignment-container">
     <div class="panel-header">
       <span>实时兵力分配清单</span>
-      <span class="text-xs text-dim">Force Assignment Table</span>
+      <span class="header-subtitle">Force Assignment Table</span>
     </div>
-    <div class="flex-1 overflow-auto bg-black/30 rounded border border-cyan-950/60 p-1">
+    <div class="table-wrapper">
       <el-table 
         :data="activeEngagements" 
         size="small" 
@@ -13,23 +13,23 @@
       >
         <el-table-column label="交战状态" width="80" align="center">
           <template #default="{ row }">
-            <span v-if="row.is_successful" class="text-red-500 font-bold animate-pulse text-lg">💥</span>
-            <span v-else class="text-yellow-500 font-bold animate-pulse text-lg">⚡</span>
+            <span v-if="row.is_successful" class="status-icon success-icon">💥</span>
+            <span v-else class="status-icon pending-icon">⚡</span>
           </template>
         </el-table-column>
         <el-table-column label="目标(蓝方)" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
-            <span class="text-cyan-300 font-bold">{{ row.targetName }}</span>
+            <span class="target-blue">{{ row.targetName }}</span>
           </template>
         </el-table-column>
         <el-table-column label="武器(红方)" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
-            <span class="text-red-400 font-bold">{{ row.weaponName }}</span>
+            <span class="weapon-red">{{ row.weaponName }}</span>
           </template>
         </el-table-column>
         <el-table-column label="动作" width="80">
           <template #default="{ row }">
-            <span :class="row.action_type === 'DESTROY' ? 'text-red-500' : 'text-yellow-400'">
+            <span :class="['action-type', row.action_type === 'DESTROY' ? 'destroy-type' : 'jam-type']">
               {{ row.action_type === 'DESTROY' ? '硬摧毁' : '电磁干扰' }}
             </span>
           </template>
@@ -40,7 +40,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <div v-if="activeEngagements.length === 0" class="text-center text-dim text-xs mt-10">
+      <div v-if="activeEngagements.length === 0" class="empty-message">
         当前分钟暂无交战行动
       </div>
     </div>
@@ -90,7 +90,82 @@ onMounted(fetchEngagements);
 
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+@import "../styles/theme.scss";
+
+.weapon-assignment-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.header-subtitle {
+  font-size: 12px;
+  color: $text-dim;
+}
+
+.table-wrapper {
+  flex: 1;
+  overflow: auto;
+  background-color: rgba(0, 0, 0, 0.3); // bg-black/30
+  border-radius: 4px;
+  border: 1px solid rgba(0, 225, 255, 0.15); // border-cyan-950/60
+  padding: 4px;
+}
+
+.status-icon {
+  font-weight: bold;
+  font-size: 18px; // text-lg
+  display: inline-block;
+  
+  &.success-icon {
+    color: #ef4444; // text-red-500
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  &.pending-icon {
+    color: #eab308; // text-yellow-500
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+.target-blue {
+  color: #67e8f9; // text-cyan-300
+  font-weight: bold;
+}
+
+.weapon-red {
+  color: #f87171; // text-red-400
+  font-weight: bold;
+}
+
+.action-type {
+  &.destroy-type {
+    color: #ef4444; // text-red-500
+  }
+  &.jam-type {
+    color: #facc15; // text-yellow-400
+  }
+}
+
+.empty-message {
+  text-align: center;
+  color: $text-dim;
+  font-size: 12px;
+  margin-top: 40px; // mt-10
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
+}
+
 :deep(.el-table) {
   background-color: transparent !important;
   color: #a0aec0;

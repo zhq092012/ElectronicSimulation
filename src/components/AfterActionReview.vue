@@ -1,43 +1,43 @@
 <template>
-  <div class="aar-panel flex-1 flex flex-col gap-5 min-h-0 bg-slate-950/20 box-border overflow-hidden">
+  <div class="aar-panel">
     <!-- Summary Cards Row -->
-    <div class="grid grid-cols-4 gap-4 flex-none">
-      <div class="summary-card tech-panel bg-gradient-to-r from-blue-950/40 to-slate-900/40">
-        <div class="text-[10px] text-dim">总计摧毁蓝方资产</div>
-        <div class="digital-font text-2xl text-red-500 font-bold mt-1">{{ summary.destroyedCount }} 个</div>
+    <div class="summary-cards-row">
+      <div class="summary-card tech-panel bg-gradient-red">
+        <div class="card-title">总计摧毁蓝方资产</div>
+        <div class="digital-font card-value text-red">{{ summary.destroyedCount }} 个</div>
       </div>
-      <div class="summary-card tech-panel bg-gradient-to-r from-blue-950/40 to-slate-900/40">
-        <div class="text-[10px] text-dim">总计阻断成功率</div>
-        <div class="digital-font text-2xl text-cyan-400 font-bold mt-1">{{ summary.blockRate }}%</div>
+      <div class="summary-card tech-panel bg-gradient-cyan">
+        <div class="card-title">总计阻断成功率</div>
+        <div class="digital-font card-value text-cyan">{{ summary.blockRate }}%</div>
       </div>
-      <div class="summary-card tech-panel bg-gradient-to-r from-blue-950/40 to-slate-900/40">
-        <div class="text-[10px] text-dim">红方累计弹药耗费</div>
-        <div class="digital-font text-2xl text-green-400 font-bold mt-1">${{ formatNumber(summary.totalCost) }}</div>
+      <div class="summary-card tech-panel bg-gradient-green">
+        <div class="card-title">红方累计弹药耗费</div>
+        <div class="digital-font card-value text-green">${{ formatNumber(summary.totalCost) }}</div>
       </div>
-      <div class="summary-card tech-panel bg-gradient-to-r from-blue-950/40 to-slate-900/40">
-        <div class="text-[10px] text-dim">达成网络自愈时延</div>
-        <div class="digital-font text-2xl text-yellow-500 font-bold mt-1">{{ summary.totalDelay }} 秒</div>
+      <div class="summary-card tech-panel bg-gradient-yellow">
+        <div class="card-title">达成网络自愈时延</div>
+        <div class="digital-font card-value text-yellow">{{ summary.totalDelay }} 秒</div>
       </div>
     </div>
 
     <!-- Charts Container Row -->
-    <div class="flex-1 grid grid-cols-12 gap-5 min-h-0">
-      <!-- Left: Radar Chart (Col Span 5) -->
-      <div class="col-span-5 tech-panel flex flex-col min-h-0">
-        <div class="panel-header flex-none">
+    <div class="charts-row">
+      <!-- Left: Radar Chart -->
+      <div class="chart-col-5 tech-panel">
+        <div class="panel-header">
           <span>兵棋推演多维方案效能对比</span>
-          <span class="text-xs text-dim">Plan Radar Analysis</span>
+          <span class="header-subtitle">Plan Radar Analysis</span>
         </div>
-        <div ref="radarChartRef" class="flex-1 w-full min-h-0"></div>
+        <div ref="radarChartRef" class="chart-container"></div>
       </div>
 
-      <!-- Right: Line + Bar Combo Chart (Col Span 7) -->
-      <div class="col-span-7 tech-panel flex flex-col min-h-0">
-        <div class="panel-header flex-none">
+      <!-- Right: Line + Bar Combo Chart -->
+      <div class="chart-col-7 tech-panel">
+        <div class="panel-header">
           <span>时序链路压制率 vs 红方资源消耗</span>
-          <span class="text-xs text-dim">Timeline Performance & Budget</span>
+          <span class="header-subtitle">Timeline Performance & Budget</span>
         </div>
-        <div ref="lineBarChartRef" class="flex-1 w-full min-h-0"></div>
+        <div ref="lineBarChartRef" class="chart-container"></div>
       </div>
     </div>
   </div>
@@ -325,7 +325,27 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+@import "../styles/theme.scss";
+
+.aar-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  background-color: rgba(15, 23, 42, 0.2); // bg-slate-950/20
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.summary-cards-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  flex: none;
+}
+
 .tech-panel {
   border-radius: 4px;
   background-color: rgba(8, 12, 22, 0.5);
@@ -335,7 +355,72 @@ onBeforeUnmount(() => {
 .summary-card {
   padding: 12px 16px;
   display: flex;
-  flex-col: column;
+  flex-direction: column;
   justify-content: center;
+}
+
+.bg-gradient-red, .bg-gradient-cyan, .bg-gradient-green, .bg-gradient-yellow {
+  background: linear-gradient(to right, rgba(13, 27, 49, 0.4), rgba(15, 23, 42, 0.4));
+}
+
+.card-title {
+  font-size: 10px;
+  color: $text-dim;
+}
+
+.card-value {
+  font-size: 24px; // text-2xl
+  font-weight: bold;
+  margin-top: 4px; // mt-1
+
+  &.text-red {
+    color: #ef4444; // text-red-500
+  }
+  &.text-cyan {
+    color: #22d3ee; // text-cyan-400
+  }
+  &.text-green {
+    color: #4ade80; // text-green-400
+  }
+  &.text-yellow {
+    color: #eab308; // text-yellow-500
+  }
+}
+
+.charts-row {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 20px;
+  min-height: 0;
+}
+
+.chart-col-5 {
+  grid-column: span 5 / span 5;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.chart-col-7 {
+  grid-column: span 7 / span 7;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel-header {
+  flex: none;
+}
+
+.header-subtitle {
+  font-size: 12px;
+  color: $text-dim;
+}
+
+.chart-container {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
 }
 </style>

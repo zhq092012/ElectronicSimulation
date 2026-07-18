@@ -1,5 +1,5 @@
 <template>
-  <div ref="container" class="battlefield-3d-canvas w-full h-full relative"></div>
+  <div ref="container" class="battlefield-3d-canvas"></div>
 </template>
 
 <script setup lang="ts">
@@ -209,8 +209,11 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .battlefield-3d-canvas {
   outline: none;
+  width: 100%;
+  height: 100%;
+  position: relative;
 }
 </style>

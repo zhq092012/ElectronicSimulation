@@ -1,20 +1,22 @@
 <template>
-  <div class="grid-bg min-h-screen p-5 flex flex-col box-border">
+  <div class="app-container grid-bg">
     <!-- Top Sci-Fi Header -->
-    <header class="tech-panel flex justify-between items-center mb-5 py-3 px-6">
-      <div class="flex items-center gap-6">
-        <div class="header-logo glow-text-cyan text-xl font-bold">CEMA SIM PLATFORM V1.0</div>
+    <header class="app-header tech-panel">
+      <div class="header-left">
+        <div class="header-logo glow-text-cyan">CEMA SIM PLATFORM V1.0</div>
         
         <!-- View Switcher Tabs -->
-        <nav class="flex gap-2">
+        <nav class="nav-tabs">
           <button 
-            :class="['px-3 py-1.5 text-xs rounded border transition font-bold cursor-pointer', currentView === 'SANDBOX' ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' : 'bg-transparent border-cyan-950/30 text-dim hover:text-cyan-400']"
+            class="tab-btn"
+            :class="{ active: currentView === 'SANDBOX' }"
             @click="currentView = 'SANDBOX'"
           >
             🖥️ 推演主沙盘
           </button>
           <button 
-            :class="['px-3 py-1.5 text-xs rounded border transition font-bold cursor-pointer', currentView === 'AAR' ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' : 'bg-transparent border-cyan-950/30 text-dim hover:text-cyan-400']"
+            class="tab-btn"
+            :class="{ active: currentView === 'AAR' }"
             @click="currentView = 'AAR'"
           >
             📊 战后效能复盘
@@ -23,20 +25,20 @@
       </div>
       
       <!-- Simulation Status Indicators -->
-      <div class="flex items-center gap-6">
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-dim">推演时钟:</span>
-          <span class="digital-font text-lg text-cyan glow-text-cyan">{{ formatTime(simTime) }}</span>
+      <div class="header-right">
+        <div class="header-right-item">
+          <span class="label-text">推演时钟:</span>
+          <span class="digital-font time-value glow-text-cyan">{{ formatTime(simTime) }}</span>
         </div>
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-dim">红方预算消耗:</span>
-          <span class="digital-font text-lg text-red glow-text-red">${{ formatNumber(budgetSpent) }} / ${{ formatNumber(maxBudget) }}</span>
+        <div class="header-right-item">
+          <span class="label-text">红方预算消耗:</span>
+          <span class="digital-font budget-value glow-text-red">${{ formatNumber(budgetSpent) }} / ${{ formatNumber(maxBudget) }}</span>
         </div>
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-dim">数据库状态:</span>
-          <span class="flex items-center gap-1">
-            <span :class="['w-2 h-2 rounded-full inline-block', isDbInitialized ? 'bg-green-500 shadow-green' : 'bg-red-500 shadow-red']"></span>
-            <span class="text-xs digital-font">{{ isDbInitialized ? 'SQLite-Wasm (OPFS)' : '连接中...' }}</span>
+        <div class="header-right-item">
+          <span class="label-text">数据库状态:</span>
+          <span class="db-status-container">
+            <span :class="['status-dot', isDbInitialized ? 'status-green' : 'status-red']"></span>
+            <span class="status-text digital-font">{{ isDbInitialized ? 'SQLite-Wasm (OPFS)' : '连接中...' }}</span>
           </span>
         </div>
         <el-button size="small" type="primary" plain @click="openSqlSandbox">
@@ -46,45 +48,45 @@
     </header>
 
     <!-- Main Workspace Grid -->
-    <div v-if="currentView === 'SANDBOX'" class="flex-1 flex flex-row gap-5 min-h-0 w-full overflow-hidden">
+    <div v-if="currentView === 'SANDBOX'" class="sandbox-workspace">
       
       <!-- Left Panel: Control Panel (25%) -->
-      <section class="w-1/4 flex flex-col gap-5 min-h-0">
+      <section class="left-sidebar">
         <!-- Controls Panel -->
-        <div class="tech-panel flex-none">
+        <div class="tech-panel config-panel">
           <div class="panel-header">
             <span>战术参数设定</span>
-            <span class="text-xs text-dim">Tactical Config</span>
+            <span class="header-subtitle">Tactical Config</span>
           </div>
-          <el-form label-position="left" label-width="90px" class="text-xs mt-3 px-2">
-            <el-form-item label="交战烈度:" class="mb-3">
-              <el-select v-model="conflictIntensity" size="small" class="w-full">
+          <el-form label-position="left" label-width="90px" class="config-form">
+            <el-form-item label="交战烈度:" class="form-item-intensity">
+              <el-select v-model="conflictIntensity" size="small" class="form-input-full">
                 <el-option label="低烈度 (软杀伤)" value="LOW" />
                 <el-option label="中烈度 (软/定向能)" value="MEDIUM" />
                 <el-option label="高烈度 (动能全开)" value="HIGH" />
               </el-select>
             </el-form-item>
-            <el-form-item label="压制时长:" class="mb-3">
-              <el-input-number v-model="suppressionTime" size="small" :min="10" :max="120" class="w-full" />
+            <el-form-item label="压制时长:" class="form-item-suppression">
+              <el-input-number v-model="suppressionTime" size="small" :min="10" :max="120" class="form-input-full" />
             </el-form-item>
-            <el-form-item label="代价上限:" class="mb-3">
-              <el-input v-model="maxBudget" size="small" class="w-full" placeholder="输入预算">
+            <el-form-item label="代价上限:" class="form-item-budget">
+              <el-input v-model="maxBudget" size="small" class="form-input-full" placeholder="输入预算">
                 <template #prefix>$</template>
               </el-input>
             </el-form-item>
-            <el-form-item label="政治红线:" class="mb-4">
-              <el-select v-model="politicalRedline" size="small" class="w-full">
+            <el-form-item label="政治红线:" class="form-item-redline">
+              <el-select v-model="politicalRedline" size="small" class="form-input-full">
                 <el-option label="严格/灰色地带 (禁打民用)" value="STRICT" />
                 <el-option label="局部冲突 (特定区域)" value="LOCAL" />
                 <el-option label="全面战争 (无限制)" value="TOTAL" />
               </el-select>
             </el-form-item>
             
-            <div class="flex gap-2">
-              <el-button type="primary" size="small" class="flex-1" @click="loadMockScenario">
+            <div class="action-btn-row">
+              <el-button type="primary" size="small" class="flex-btn" @click="loadMockScenario">
                 ⚡ 初始化数据
               </el-button>
-              <el-button type="success" size="small" class="flex-1" :disabled="!isScenarioLoaded" @click="runOrbitCalculation">
+              <el-button type="success" size="small" class="flex-btn" :disabled="!isScenarioLoaded" @click="runOrbitCalculation">
                 🛰️ 轨道视算
               </el-button>
             </div>
@@ -92,7 +94,7 @@
             <el-button 
               :type="isPlaying ? 'warning' : 'danger'" 
               size="small" 
-              class="w-full font-bold mt-2" 
+              class="submit-btn font-bold-btn" 
               :disabled="!isScenarioLoaded" 
               @click="togglePlay"
             >
@@ -102,7 +104,7 @@
             <el-button 
               type="success" 
               size="small" 
-              class="w-full font-bold mt-2" 
+              class="submit-btn font-bold-btn" 
               :disabled="simMinutes < 50" 
               @click="savePlan"
             >
@@ -111,22 +113,22 @@
           </el-form>
 
           <!-- Slider representing minutes of the simulation -->
-          <div class="mt-4 px-2">
-            <div class="flex justify-between text-xs mb-1">
-              <span class="text-dim">推演步长演进:</span>
-              <span class="text-cyan-400 digital-font">{{ simMinutes }} / 50 min</span>
+          <div class="time-slider-container">
+            <div class="slider-header">
+              <span class="label-text">推演步长演进:</span>
+              <span class="time-progress digital-font">{{ simMinutes }} / 50 min</span>
             </div>
             <el-slider v-model="simMinutes" :min="0" :max="50" :step="1" :disabled="!isScenarioLoaded" @change="onTimeStepChange" />
           </div>
         </div>
 
         <!-- Combat Event History (Timeline) -->
-        <div class="tech-panel flex-1 flex flex-col min-h-0">
+        <div class="tech-panel timeline-panel">
           <div class="panel-header">
             <span>动态推演时间轴</span>
-            <span class="text-xs digital-font">Timeline</span>
+            <span class="header-subtitle digital-font">Timeline</span>
           </div>
-          <div ref="timelineContainer" class="flex-1 overflow-y-auto bg-black/40 p-4 rounded border border-cyan-900/50">
+          <div ref="timelineContainer" class="timeline-log-container">
             <el-timeline v-if="filteredLogs.length > 0">
               <el-timeline-item
                 v-for="(log, index) in filteredLogs"
@@ -135,94 +137,99 @@
                 size="normal"
                 :timestamp="log.time"
               >
-                <div class="text-xs text-dim leading-snug">{{ log.message }}</div>
+                <div class="log-message">{{ log.message }}</div>
               </el-timeline-item>
             </el-timeline>
-            <div v-else class="text-dim text-center mt-10 text-xs">暂无推演事件</div>
+            <div v-else class="empty-log-message">暂无推演事件</div>
           </div>
         </div>
       </section>
 
       <!-- Center Panel: Wargaming 3D/2D Topology (50%) -->
-      <section class="w-1/2 tech-panel flex flex-col min-h-0 relative">
+      <section class="center-viewport tech-panel">
         <div class="panel-header">
           <span>空天地立体对抗网络拓扑视口</span>
-          <div class="flex gap-2">
+          <div class="side-tags-row">
             <span class="side-tag blue-side">蓝方全链路</span>
             <span class="side-tag red-side">红方干扰阵地</span>
           </div>
         </div>
 
         <!-- Network Topology Canvas (3D Force Graph) -->
-        <div class="flex-1 bg-black/60 rounded border border-cyan-950/60 relative overflow-hidden flex flex-col min-h-0">
+        <div class="canvas-container">
           <Battlefield3D 
             v-if="isScenarioLoaded"
             :nodes="assets" 
             :links="links" 
             @select-node="selectEntity" 
           />
-          <div v-else class="flex-1 flex items-center justify-center text-dim text-xs">
+          <div v-else class="empty-canvas-message">
             请在左侧点击“初始化数据”载入推演场景
           </div>
         </div>
       </section>
 
       <!-- Right Panel: BDA Dashboard (25%) -->
-      <section class="w-1/4 flex flex-col gap-5 min-h-0">
+      <section class="right-sidebar">
         
         <!-- Radar Chart -->
-        <div class="tech-panel h-[250px] flex flex-col min-h-0">
+        <div class="tech-panel radar-card">
           <div class="panel-header">
             <span>综合效能动态评估</span>
-            <span class="text-xs text-dim">Live BDA Radar</span>
+            <span class="header-subtitle">Live BDA Radar</span>
           </div>
-          <div ref="smallRadarChartRef" class="flex-1 w-full min-h-[150px]"></div>
+          <div ref="smallRadarChartRef" class="small-radar-container"></div>
         </div>
 
         <!-- Weapon Assignment Table -->
-        <div class="tech-panel flex-1 flex flex-col min-h-0">
+        <div class="tech-panel weapon-assignment-card">
           <WeaponAssignmentTable :currentTime="simTime" />
         </div>
         
         <!-- Tactical Entity Detail Card -->
-        <div class="tech-panel flex-none h-[220px] flex flex-col">
+        <div class="tech-panel inspector-card">
           <div class="panel-header">
             <span>实体信息探针</span>
-            <span class="text-xs text-dim">Entity Inspector</span>
+            <span class="header-subtitle">Entity Inspector</span>
           </div>
 
-          <div class="flex-1 overflow-y-auto text-xs">
+          <div class="inspector-details">
             <div v-if="selectedEntity">
-              <div class="flex justify-between items-center mb-3">
-                <span class="text-sm font-bold text-cyan-300">{{ selectedEntity.name || selectedEntity.id }}</span>
+              <div class="inspector-header">
+                <span class="entity-name">{{ selectedEntity.name || selectedEntity.id }}</span>
                 <span :class="['side-tag', selectedEntity.side === 'RED' ? 'red-side' : 'blue-side']">
                   {{ selectedEntity.side === 'RED' ? '红方武器' : '蓝方资产' }}
                 </span>
               </div>
 
               <!-- Asset Detail Table -->
-              <div v-if="selectedType === 'ASSET'" class="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                <div><span class="text-dim">实体类型:</span> <span class="digital-font">{{ selectedEntity.asset_class }}</span></div>
-                <div><span class="text-dim">核心功能:</span> <span class="digital-font">{{ selectedEntity.func_type }}</span></div>
-                <div><span class="text-dim">所有权:</span> <span class="digital-font">{{ selectedEntity.usage_type }}</span></div>
-                <div><span class="text-dim">空间分层:</span> <span class="digital-font">{{ getLayerLabel(selectedEntity.layer) }}</span></div>
-                <div><span class="text-dim">抗干扰级:</span> <span class="digital-font text-yellow-400">{{ selectedEntity.anti_jam_level }}</span></div>
-                <div><span class="text-dim">目标价值:</span> <span class="digital-font text-cyan-400">{{ selectedEntity.base_priority }}</span></div>
-                <div class="col-span-2"><span class="text-dim">三维坐标:</span> <span class="digital-font">L:{{ selectedEntity.lat ? selectedEntity.lat.toFixed(2) : '计算中' }},{{ selectedEntity.lng ? selectedEntity.lng.toFixed(2) : '计算中' }} A:{{ selectedEntity.alt || 0 }}km</span></div>
-                <div class="col-span-2"><span class="text-dim">雷达发现:</span> <span class="digital-font" :class="selectedEntity.is_detected_by_red ? 'text-red-400' : 'text-green-400'">{{ selectedEntity.is_detected_by_red ? '已被锁定' : '隐蔽中' }}</span></div>
+              <div v-if="selectedType === 'ASSET'" class="info-grid">
+                <div><span class="label-dim">实体类型:</span> <span class="digital-font">{{ selectedEntity.asset_class }}</span></div>
+                <div><span class="label-dim">核心功能:</span> <span class="digital-font">{{ selectedEntity.func_type }}</span></div>
+                <div><span class="label-dim">所有权:</span> <span class="digital-font">{{ selectedEntity.usage_type }}</span></div>
+                <div><span class="label-dim">空间分层:</span> <span class="digital-font">{{ getLayerLabel(selectedEntity.layer) }}</span></div>
+                <div><span class="label-dim">抗干扰级:</span> <span class="digital-font value-yellow">{{ selectedEntity.anti_jam_level }}</span></div>
+                <div><span class="label-dim">目标价值:</span> <span class="digital-font value-cyan">{{ selectedEntity.base_priority }}</span></div>
+                <div class="grid-col-full"><span class="label-dim">三维坐标:</span> <span class="digital-font">L:{{ selectedEntity.lat ? selectedEntity.lat.toFixed(2) : '计算中' }},{{ selectedEntity.lng ? selectedEntity.lng.toFixed(2) : '计算中' }} A:{{ selectedEntity.alt || 0 }}km</span></div>
+                <div class="grid-col-full">
+                  <span class="label-dim">雷达发现:</span> 
+                  <span :class="['digital-font', selectedEntity.is_detected_by_red ? 'detected-red' : 'hidden-green']">
+                    {{ selectedEntity.is_detected_by_red ? '已被锁定' : '隐蔽中' }}
+                  </span>
+                </div>
               </div>
 
               <!-- Weapon Detail Table -->
-              <div v-if="selectedType === 'WEAPON'" class="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                <div><span class="text-dim">杀伤分类:</span> <span class="digital-font">{{ selectedEntity.category }}</span></div>
-                <div><span class="text-dim">毁伤机制:</span> <span class="digital-font">{{ selectedEntity.kill_type }}</span></div>
-                <div><span class="text-dim">打击范围:</span> <span class="digital-font">{{ selectedEntity.max_range === -1 ? '全球' : selectedEntity.max_range + ' km' }}</span></div>
-                <div><span class="text-dim">库存弹药:</span> <span class="digital-font">{{ selectedEntity.inventory === -1 ? '无限次' : selectedEntity.inventory }}</span></div>
-                <div><span class="text-dim">单次耗费:</span> <span class="digital-font text-green-400">${{ formatNumber(selectedEntity.action_cost) }}</span></div>
-                <div><span class="text-dim">升级红线:</span> <span class="digital-font text-red-400">{{ selectedEntity.political_risk }}</span></div>
+              <div v-if="selectedType === 'WEAPON'" class="info-grid">
+                <div><span class="label-dim">杀伤分类:</span> <span class="digital-font">{{ selectedEntity.category }}</span></div>
+                <div><span class="label-dim">毁伤机制:</span> <span class="digital-font">{{ selectedEntity.kill_type }}</span></div>
+                <div><span class="label-dim">打击范围:</span> <span class="digital-font">{{ selectedEntity.max_range === -1 ? '全球' : selectedEntity.max_range + ' km' }}</span></div>
+                <div><span class="label-dim">库存弹药:</span> <span class="digital-font">{{ selectedEntity.inventory === -1 ? '无限次' : selectedEntity.inventory }}</span></div>
+                <div><span class="label-dim">单次耗费:</span> <span class="digital-font value-green">${{ formatNumber(selectedEntity.action_cost) }}</span></div>
+                <div><span class="label-dim">升级红线:</span> <span class="digital-font value-red">{{ selectedEntity.political_risk }}</span></div>
               </div>
             </div>
-            <div v-else class="text-dim text-center mt-5">点击 3D 拓扑节点，在此查看探针参数</div>
+            <div v-else class="empty-inspector">点击 3D 拓扑节点，在此查看探针参数</div>
           </div>
         </div>
 
@@ -537,9 +544,316 @@ watch(currentView, () => {
 <style lang="scss">
 @import "./styles/theme.scss";
 
-// Header status glow
-.shadow-green { box-shadow: 0 0 8px #10b981; }
-.shadow-red { box-shadow: 0 0 8px #ef4444; }
+.app-container {
+  min-height: 100vh;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 12px 24px;
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    
+    .header-logo {
+      font-size: 20px;
+      font-weight: bold;
+    }
+  }
+
+  .nav-tabs {
+    display: flex;
+    gap: 8px;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+
+    .header-right-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .db-status-container {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+  }
+}
+
+.tab-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 225, 255, 0.15);
+  background-color: transparent;
+  color: $text-dim;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    color: #00e1ff;
+  }
+
+  &.active {
+    background-color: rgba(0, 225, 255, 0.2);
+    border-color: #00e1ff;
+    color: #00e1ff;
+  }
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  
+  &.status-green {
+    background-color: #10b981;
+    box-shadow: 0 0 8px #10b981;
+  }
+  
+  &.status-red {
+    background-color: #ef4444;
+    box-shadow: 0 0 8px #ef4444;
+  }
+}
+
+.sandbox-workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.left-sidebar {
+  width: 25%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  
+  .config-panel {
+    flex: none;
+  }
+  
+  .config-form {
+    font-size: 12px;
+    margin-top: 12px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  
+  .form-input-full {
+    width: 100% !important;
+  }
+  
+  .action-btn-row {
+    display: flex;
+    gap: 8px;
+    
+    .flex-btn {
+      flex: 1;
+    }
+  }
+  
+  .submit-btn {
+    width: 100% !important;
+    font-weight: bold;
+    margin-top: 8px !important;
+  }
+  
+  .time-slider-container {
+    margin-top: 16px;
+    padding-left: 8px;
+    padding-right: 8px;
+    
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 4px;
+      
+      .time-progress {
+        color: #00e1ff;
+      }
+    }
+  }
+
+  .timeline-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .timeline-log-container {
+    flex: 1;
+    overflow-y: auto;
+    background-color: rgba(0, 0, 0, 0.4);
+    padding: 16px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 225, 255, 0.15);
+    
+    .log-message {
+      font-size: 12px;
+      color: $text-dim;
+      line-height: 1.375;
+    }
+    
+    .empty-log-message {
+      color: $text-dim;
+      text-align: center;
+      margin-top: 40px;
+      font-size: 12px;
+    }
+  }
+}
+
+.center-viewport {
+  width: 50%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+  
+  .side-tags-row {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .canvas-container {
+    flex: 1;
+    background-color: rgba(0, 0, 0, 0.6);
+    border-radius: 4px;
+    border: 1px solid rgba(0, 225, 255, 0.15);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    
+    .empty-canvas-message {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: $text-dim;
+      font-size: 12px;
+    }
+  }
+}
+
+.right-sidebar {
+  width: 25%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  
+  .radar-card {
+    height: 250px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    
+    .small-radar-container {
+      flex: 1;
+      width: 100%;
+      min-height: 150px;
+    }
+  }
+  
+  .weapon-assignment-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  
+  .inspector-card {
+    flex: none;
+    height: 220px;
+    display: flex;
+    flex-direction: column;
+    
+    .inspector-details {
+      flex: 1;
+      overflow-y: auto;
+      font-size: 12px;
+      
+      .inspector-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        
+        .entity-name {
+          font-size: 14px;
+          font-weight: bold;
+          color: #67e8f9;
+        }
+      }
+      
+      .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 16px;
+        row-gap: 6px;
+        
+        .grid-col-full {
+          grid-column: span 2 / span 2;
+        }
+      }
+      
+      .label-dim {
+        color: $text-dim;
+      }
+      
+      .value-yellow {
+        color: #facc15;
+      }
+      .value-cyan {
+        color: #22d3ee;
+      }
+      .value-green {
+        color: #4ade80;
+      }
+      .value-red {
+        color: #f87171;
+      }
+      .detected-red {
+        color: #f87171;
+      }
+      .hidden-green {
+        color: #4ade80;
+      }
+      
+      .empty-inspector {
+        color: $text-dim;
+        text-align: center;
+        margin-top: 20px;
+      }
+    }
+  }
+}
 
 // el-timeline customization
 .el-timeline {
@@ -548,50 +862,4 @@ watch(currentView, () => {
 .el-timeline-item__content {
   color: #a0aec0;
 }
-</style>
-
-<style>
-/* CSS polyfill for Tailwind classes */
-.flex { display: flex !important; }
-.flex-col { flex-direction: column !important; }
-.flex-row { flex-direction: row !important; }
-.flex-1 { flex: 1 1 0% !important; min-height: 0 !important; min-width: 0 !important; }
-.flex-none { flex: none !important; }
-.grid { display: grid !important; }
-.grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
-.grid-cols-12 { grid-template-columns: repeat(12, minmax(0, 1fr)) !important; }
-.col-span-3 { grid-column: span 3 / span 3 !important; }
-.col-span-5 { grid-column: span 5 / span 5 !important; }
-.col-span-6 { grid-column: span 6 / span 6 !important; }
-.col-span-7 { grid-column: span 7 / span 7 !important; }
-.gap-2 { gap: 8px !important; }
-.gap-3 { gap: 12px !important; }
-.gap-4 { gap: 16px !important; }
-.gap-5 { gap: 20px !important; }
-.gap-6 { gap: 24px !important; }
-.w-full { width: 100% !important; }
-.h-full { height: 100% !important; }
-.w-1\/4 { width: 25% !important; }
-.w-1\/2 { width: 50% !important; }
-.min-h-0 { min-height: 0 !important; }
-.min-w-0 { min-width: 0 !important; }
-.min-h-screen { min-height: 100vh !important; }
-.h-screen { height: 100vh !important; }
-.overflow-hidden { overflow: hidden !important; }
-.overflow-y-auto { overflow-y: auto !important; }
-.box-border { box-sizing: border-box !important; }
-.relative { position: relative !important; }
-.p-5 { padding: 20px !important; }
-.py-3 { padding-top: 12px !important; padding-bottom: 12px !important; }
-.px-6 { padding-left: 24px !important; padding-right: 24px !important; }
-.mb-3 { margin-bottom: 12px !important; }
-.mb-4 { margin-bottom: 16px !important; }
-.mb-5 { margin-bottom: 20px !important; }
-.mt-2 { margin-top: 8px !important; }
-.mt-3 { margin-top: 12px !important; }
-.mt-4 { margin-top: 16px !important; }
-.justify-between { justify-content: space-between !important; }
-.items-center { align-items: center; }
-.items-stretch { align-items: stretch; }
-.flex-wrap { flex-wrap: wrap; }
 </style>
