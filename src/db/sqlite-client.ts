@@ -1,0 +1,111 @@
+import { ref } from 'vue';
+
+class SQLiteClient {
+  private worker: Worker | null = null;
+  private pendingQueries = new Map<string, { resolve: Function; reject: Function }>();
+  
+  private initResolver: (() => void) | null = null;
+  private initRejecter: ((err: Error) => void) | null = null;
+  
+  public isInitialized = ref(false);
+  public initError = ref<string | null>(null);
+
+  constructor() {
+    // 使用 Vite 的 import.meta.url 加载 Web Worker
+    this.worker = new Worker(
+      new URL('../workers/sqlite.worker.ts', import.meta.url),
+      { type: 'module' }
+    );
+
+    this.worker.onmessage = (event: MessageEvent) => {
+      const { type, id, result, error, changes } = event.data;
+
+      if (type === 'INIT_SUCCESS') {
+        this.isInitialized.value = true;
+        if (this.initResolver) {
+          this.initResolver();
+          this.initResolver = null;
+          this.initRejecter = null;
+        }
+        return;
+      }
+
+      if (type === 'INIT_ERROR') {
+        this.initError.value = error;
+        this.isInitialized.value = false;
+        if (this.initRejecter) {
+          this.initRejecter(new Error(error));
+          this.initResolver = null;
+          this.initRejecter = null;
+        }
+        return;
+      }
+
+      const pending = this.pendingQueries.get(id);
+      if (pending) {
+        this.pendingQueries.delete(id);
+        if (type === 'SUCCESS') {
+          pending.resolve(result !== undefined ? result : { changes });
+        } else {
+          pending.reject(new Error(error));
+        }
+      }
+    };
+  }
+
+  /**
+   * 初始化数据库进程
+   */
+  public init(): Promise<void> {
+    if (this.isInitialized.value) return Promise.resolve();
+    if (this.initError.value) return Promise.reject(new Error(this.initError.value));
+    
+    return new Promise<void>((resolve, reject) => {
+      this.initResolver = resolve;
+      this.initRejecter = reject;
+      this.worker?.postMessage({ type: 'INIT' });
+    });
+  }
+
+  /**
+   * 发送指令到 Web Worker
+   */
+  private send<T>(type: 'QUERY' | 'EXEC' | 'CALCULATE_WINDOWS' | 'AUTO_ALLOCATE_WEAPONS', sql: string, params?: any[]): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const id = Math.random().toString(36).substring(2, 9);
+      this.pendingQueries.set(id, { resolve, reject });
+      this.worker?.postMessage({ type, id, sql, params });
+    });
+  }
+
+  /**
+   * 执行查询语句 (返回行数据对象数组)
+   */
+  public query<T>(sql: string, params?: any[]): Promise<T[]> {
+    return this.send<T[]>('QUERY', sql, params);
+  }
+
+  /**
+   * 执行指令语句 (INSERT, UPDATE, DELETE 等)
+   */
+  public execute(sql: string, params?: any[]): Promise<{ changes: number }> {
+    return this.send<{ changes: number }>('EXEC', sql, params);
+  }
+
+  /**
+   * 触发 Web Worker 中的 satellite.js 轨道视算
+   */
+  public calculateWindows(scenarioId: string): Promise<{ message: string }> {
+    return this.send<{ message: string }>('CALCULATE_WINDOWS', '', [scenarioId]);
+  }
+
+  /**
+   * 触发 Web Worker 中的自动化武器分配及交战结算
+   */
+  public allocateWeapons(intensity: string, currentTime: number, scenarioId: string): Promise<{ engagements_created: number }> {
+    return this.send<{ engagements_created: number }>('AUTO_ALLOCATE_WEAPONS', '', [{ intensity, currentTime, scenarioId }]);
+  }
+}
+
+export const sqliteClient = new SQLiteClient();
+export default sqliteClient;

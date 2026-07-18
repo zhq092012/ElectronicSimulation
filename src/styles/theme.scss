@@ -1,0 +1,225 @@
+// 蓝色科技风格/科幻风格 (Blue Cyberpunk/Sci-Fi Theme) 全局样式系统
+
+// 颜色定义
+$bg-dark: #080c16;
+$bg-panel: rgba(13, 27, 49, 0.7);
+$border-cyan: #00e1ff;
+$border-cyan-dim: rgba(0, 225, 255, 0.25);
+$accent-red: #ff2a5f;
+$accent-blue: #0066ff;
+$text-light: #e1e9f5;
+$text-dim: #8b9bb4;
+
+// 字体导入
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Share+Tech+Mono&family=Inter:wght@300;400;600&display=swap');
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background-color: $bg-dark;
+  background-image: 
+    radial-gradient(circle at 50% 50%, rgba(13, 37, 75, 0.4) 0%, rgba(8, 12, 22, 1) 100%),
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  background-size: 100% 100%, 100% 4px, 6px 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: $text-light;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+// 科技感滚动条
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(8, 12, 22, 0.5);
+}
+::-webkit-scrollbar-thumb {
+  background: $border-cyan-dim;
+  border-radius: 3px;
+  &:hover {
+    background: $border-cyan;
+  }
+}
+
+// 霓虹发光文字
+.glow-text-cyan {
+  text-shadow: 0 0 10px rgba(0, 225, 255, 0.8), 0 0 20px rgba(0, 225, 255, 0.3);
+  color: $border-cyan;
+  font-family: 'Orbitron', sans-serif;
+}
+
+.glow-text-red {
+  text-shadow: 0 0 10px rgba(255, 42, 95, 0.8), 0 0 20px rgba(255, 42, 95, 0.3);
+  color: $accent-red;
+  font-family: 'Orbitron', sans-serif;
+}
+
+.tech-panel {
+  background: $bg-panel;
+  border: 1px solid $border-cyan-dim;
+  box-shadow: 
+    inset 0 0 15px rgba(0, 225, 255, 0.05),
+    0 4px 24px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  border-radius: 4px;
+  padding: 15px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 6px;
+    height: 6px;
+    border-top: 2px solid $border-cyan;
+    border-left: 2px solid $border-cyan;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 6px;
+    height: 6px;
+    border-bottom: 2px solid $border-cyan;
+    border-right: 2px solid $border-cyan;
+  }
+
+  &:hover {
+    border-color: rgba(0, 225, 255, 0.6);
+    box-shadow: 
+      inset 0 0 20px rgba(0, 225, 255, 0.1),
+      0 0 15px rgba(0, 225, 255, 0.2);
+  }
+
+  .panel-header {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    letter-spacing: 1px;
+    color: $border-cyan;
+    border-bottom: 1px solid rgba(0, 225, 255, 0.15);
+    padding-bottom: 8px;
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
+// 电子网格背景
+.grid-bg {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(0, 225, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 225, 255, 0.03) 1px, transparent 1px);
+}
+
+// 战棋数字字体
+.digital-font {
+  font-family: 'Share Tech Mono', monospace;
+}
+
+// 元素重写以便适应深色科技风格
+.el-table {
+  background-color: transparent !important;
+  color: $text-light !important;
+  --el-table-border-color: rgba(0, 225, 255, 0.1) !important;
+  --el-table-header-bg-color: rgba(13, 27, 49, 0.9) !important;
+  --el-table-row-hover-bg-color: rgba(0, 225, 255, 0.1) !important;
+  
+  tr {
+    background-color: transparent !important;
+  }
+  
+  th.el-table__cell {
+    color: $border-cyan !important;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px;
+  }
+  
+  td.el-table__cell {
+    border-bottom: 1px solid rgba(0, 225, 255, 0.1) !important;
+  }
+}
+
+.el-tabs__item {
+  color: $text-dim !important;
+  font-family: 'Orbitron', sans-serif;
+  
+  &.is-active {
+    color: $border-cyan !important;
+  }
+}
+
+.el-tabs__active-bar {
+  background-color: $border-cyan !important;
+}
+
+.el-input__wrapper, .el-textarea__inner {
+  background-color: rgba(8, 12, 22, 0.8) !important;
+  box-shadow: 0 0 0 1px $border-cyan-dim inset !important;
+  color: $text-light !important;
+  
+  &:hover, &.is-focus {
+    box-shadow: 0 0 0 1px $border-cyan inset, 0 0 8px rgba(0, 225, 255, 0.4) !important;
+  }
+}
+
+.el-button {
+  background-color: rgba(13, 27, 49, 0.8) !important;
+  border: 1px solid $border-cyan-dim !important;
+  color: $border-cyan !important;
+  font-family: 'Orbitron', sans-serif;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease !important;
+
+  &:hover:not(.is-disabled) {
+    background-color: $border-cyan !important;
+    color: $bg-dark !important;
+    box-shadow: 0 0 10px $border-cyan;
+  }
+
+  &.el-button--danger {
+    color: $accent-red !important;
+    border-color: rgba(255, 42, 95, 0.3) !important;
+    background-color: rgba(49, 13, 27, 0.8) !important;
+
+    &:hover:not(.is-disabled) {
+      background-color: $accent-red !important;
+      color: $text-light !important;
+      box-shadow: 0 0 10px $accent-red;
+    }
+  }
+}
+
+// Faction Tag Styles
+.side-tag {
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: bold;
+  font-family: 'Orbitron', sans-serif;
+  display: inline-block;
+
+  &.red-side {
+    background: rgba(255, 42, 95, 0.2);
+    border: 1px solid $accent-red;
+    color: $accent-red;
+  }
+
+  &.blue-side {
+    background: rgba(0, 102, 255, 0.2);
+    border: 1px solid $accent-blue;
+    color: #4da6ff;
+  }
+}
+
