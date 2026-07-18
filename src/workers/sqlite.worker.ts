@@ -366,8 +366,7 @@ addEventListener('message', (event: MessageEvent) => {
                 height: station.alt || 0 
               };
 
-              const observerEcf = satellite.geodeticToEcf(observerGeodetic);
-              const lookAngles = satellite.ecfToLookAngles(observerEcf, posEcf);
+              const lookAngles = satellite.ecfToLookAngles(observerGeodetic, posEcf);
               const elevation = satellite.radiansToDegrees(lookAngles.elevation);
 
               const key = `${sat.id}-${station.id}`;

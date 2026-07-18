@@ -114,12 +114,12 @@ onMounted(() => {
 
   const gridConfigs = [
     { z: 150, color: '#00e1ff', opacity: 0.15 },  // 太空网格 (Space)
-    { z: 0, color: '#10b981', opacity: 0.08 },    // 空域网格 (Air)
-    { z: -150, color: '#3b82f6', opacity: 0.22 }  // 地面网格 (Ground)
+    { z: 0, color: '#10b981', opacity: 0.15 },    // 空域网格 (Air)
+    { z: -150, color: '#3b82f6', opacity: 0.18 }  // 地面网格 (Ground)
   ];
 
   gridConfigs.forEach(config => {
-    const grid = new THREE.GridHelper(500, 30, config.color, 'rgba(0, 225, 255, 0.03)');
+    const grid = new THREE.GridHelper(500, 30, config.color, config.color);
     grid.position.z = config.z;
     grid.rotation.x = Math.PI / 2;
 

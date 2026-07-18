@@ -368,10 +368,17 @@ const refreshData = async () => {
         let y = undefined;
         if (a.lat !== null && a.lat !== undefined && a.lat !== 0 &&
             a.lng !== null && a.lng !== undefined && a.lng !== 0) {
-          x = ((a.lng - 121.0) / 2.0) * 160;
-          y = ((a.lat - 24.0) / 2.0) * 160;
-          
           const CLAMP_BOUND = 200;
+          if (a.layer === 2) {
+            // Global mapping for satellites: [-180, 180] -> [-200, 200] and [-90, 90] -> [-200, 200]
+            x = (a.lng / 180.0) * CLAMP_BOUND;
+            y = (a.lat / 90.0) * CLAMP_BOUND;
+          } else {
+            // Local mapping for stations/drones around Taiwan
+            x = ((a.lng - 121.0) / 2.0) * 160;
+            y = ((a.lat - 24.0) / 2.0) * 160;
+          }
+          
           x = Math.max(-CLAMP_BOUND, Math.min(CLAMP_BOUND, x));
           y = Math.max(-CLAMP_BOUND, Math.min(CLAMP_BOUND, y));
         }

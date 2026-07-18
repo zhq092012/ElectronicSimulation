@@ -1,7 +1,7 @@
 <template>
   <div class="aar-panel">
     <!-- Summary Cards Row -->
-    <div class="summary-cards-row">
+    <div class="summary-cards-row">  ui
       <div class="summary-card tech-panel bg-gradient-red">
         <div class="card-title">总计摧毁蓝方资产</div>
         <div class="digital-font card-value text-red">{{ summary.destroyedCount }} 个</div>
