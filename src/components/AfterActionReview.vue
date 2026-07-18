@@ -1,7 +1,7 @@
 <template>
   <div class="aar-panel">
     <!-- Summary Cards Row -->
-    <div class="summary-cards-row">  ui
+    <div class="summary-cards-row">
       <div class="summary-card tech-panel bg-gradient-red">
         <div class="card-title">总计摧毁蓝方资产</div>
         <div class="digital-font card-value text-red">{{ summary.destroyedCount }} 个</div>
@@ -92,12 +92,12 @@ const loadAndAggregateData = async () => {
 
     // Calculate dynamic radar scores for Plan A (EW/Cyber Plan) based on current DB state
     const blockScore = summary.value.blockRate;
-    const controlScore = Math.max(30, Math.round(100 - (summary.value.totalCost / 200000) * 50)); 
+    const controlScore = Math.max(30, Math.round(100 - (summary.value.totalCost / 200000) * 50));
     const costEfficiency = Math.min(95, Math.round((summary.value.totalDelay / (summary.value.totalCost + 100)) * 6000));
     const selfInterference = Math.max(20, Math.round(100 - (summary.value.totalCost > 50000 ? 40 : 15)));
 
     const planAScores = [blockScore, controlScore, costEfficiency, selfInterference];
-    
+
     // Plan B (Mocked Kinetic missile strategy as comparison)
     const planBScores = [95, 30, 45, 85];
 
@@ -368,7 +368,10 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 
-.bg-gradient-red, .bg-gradient-cyan, .bg-gradient-green, .bg-gradient-yellow {
+.bg-gradient-red,
+.bg-gradient-cyan,
+.bg-gradient-green,
+.bg-gradient-yellow {
   background: linear-gradient(to right, rgba(13, 27, 49, 0.4), rgba(15, 23, 42, 0.4));
 }
 
@@ -385,12 +388,15 @@ onBeforeUnmount(() => {
   &.text-red {
     color: #ef4444; // text-red-500
   }
+
   &.text-cyan {
     color: #22d3ee; // text-cyan-400
   }
+
   &.text-green {
     color: #4ade80; // text-green-400
   }
+
   &.text-yellow {
     color: #eab308; // text-yellow-500
   }
