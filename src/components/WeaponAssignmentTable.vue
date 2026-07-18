@@ -58,6 +58,9 @@ const props = defineProps<{
 const activeEngagements = ref<any[]>([]);
 
 const fetchEngagements = async () => {
+  if (!sqliteClient.isInitialized.value) {
+    return; // Wait until DB is ready
+  }
   if (props.currentTime === 0) {
     activeEngagements.value = [];
     return;
@@ -66,7 +69,7 @@ const fetchEngagements = async () => {
   // Find engagements active exactly at this minute
   try {
     const res = await sqliteClient.query<any>(`
-      SELECT e.*, w.name as weaponName, a.name as targetName, a.id as targetId 
+      SELECT e.*, w.name as weaponName, a.id as targetName, a.id as targetId 
       FROM engagements e
       JOIN weapons w ON e.weapon_id = w.id
       JOIN communication_windows cw ON e.target_window_id = cw.id
@@ -85,7 +88,7 @@ const tableRowClassName = ({ row }: { row: any }) => {
   return 'bg-yellow-950/10';
 };
 
-watch(() => props.currentTime, fetchEngagements);
+watch(() => [props.currentTime, sqliteClient.isInitialized.value], fetchEngagements);
 onMounted(fetchEngagements);
 
 </script>

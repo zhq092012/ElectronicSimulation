@@ -44,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import * as echarts from 'echarts';
 import { sqliteClient } from '../db/sqlite-client';
 
@@ -69,6 +69,9 @@ const formatNumber = (num: number) => {
 
 // Aggregates data from SQLite Wasm and renders charts
 const loadAndAggregateData = async () => {
+  if (!sqliteClient.isInitialized.value) {
+    return;
+  }
   try {
     // 1. Fetch current plan performance metrics
     const plans = await sqliteClient.query<any>("SELECT * FROM tactical_plans WHERE id = 'plan-001'");
@@ -311,6 +314,12 @@ onMounted(() => {
   nextTick(() => {
     loadAndAggregateData();
   });
+});
+
+watch(() => sqliteClient.isInitialized.value, (init) => {
+  if (init) {
+    loadAndAggregateData();
+  }
 });
 
 onBeforeUnmount(() => {
