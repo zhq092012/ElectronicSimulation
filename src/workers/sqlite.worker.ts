@@ -195,10 +195,11 @@ function autoAllocateWeapons(intensity: string, currentTime: number, scenarioId:
         const attenuation_att = 0.90;
 
         // 解算最终有效干信比 (J/S Ratio)
-        // 假定干扰开机基准功率为 3000W，蓝方通信基准功率为 0.05W
+        // 假定干扰开机基准功率为 3000W，蓝方通信基准功率为 0.05W，并考虑通信链路基准距离的自由空间损耗以计算接收端功率
         const P_jam = 3000;
-        const P_sig = 0.05;
-        const js = 10 * Math.log10((P_jam * attenuation_dist * attenuation_terrain * attenuation_alt * attenuation_vel * attenuation_att) / P_sig);
+        const d_sig = 600.0;
+        const P_sig_recv = 0.05 / (4 * Math.PI * Math.pow(d_sig, 2));
+        const js = 10 * Math.log10((P_jam * attenuation_dist * attenuation_terrain * attenuation_alt * attenuation_vel * attenuation_att) / P_sig_recv);
         const final_js = Math.round(js * 100) / 100;
 
         // 打击判定: 干信比超过接收机抗干扰等级为成功拦截
@@ -369,7 +370,7 @@ addEventListener('message', (event: MessageEvent) => {
               const lookAngles = satellite.ecfToLookAngles(observerGeodetic, posEcf);
               const elevation = satellite.radiansToDegrees(lookAngles.elevation);
 
-              const key = `${sat.id}-${station.id}`;
+              const key = `${sat.id}::${station.id}`;
               const mask = station.terrain_mask_angle || 10.0;
               const isVisible = elevation >= mask;
 
@@ -396,7 +397,7 @@ addEventListener('message', (event: MessageEvent) => {
         }
 
         for (const [key, start] of activeWindows.entries()) {
-          const [satId, stationId] = key.split('-');
+          const [satId, stationId] = key.split('::');
           const windowId = `win-${satId}-${stationId}-${start}`;
           db.exec({
             sql: `

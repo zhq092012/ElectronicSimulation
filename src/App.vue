@@ -197,8 +197,8 @@
             <div v-if="selectedEntity">
               <div class="inspector-header">
                 <span class="entity-name">{{ selectedEntity.name || selectedEntity.id }}</span>
-                <span :class="['side-tag', selectedEntity.side === 'RED' ? 'red-side' : 'blue-side']">
-                  {{ selectedEntity.side === 'RED' ? '红方武器' : '蓝方资产' }}
+                <span :class="['side-tag', (selectedType === 'WEAPON' || selectedEntity.side === 'RED') ? 'red-side' : 'blue-side']">
+                  {{ (selectedType === 'WEAPON' || selectedEntity.side === 'RED') ? (selectedType === 'WEAPON' ? '红方武器' : '红方资产') : '蓝方资产' }}
                 </span>
               </div>
 
