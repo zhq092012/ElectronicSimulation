@@ -69,6 +69,13 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
  * 核心推运对抗战术引擎 (Event Loop 打击判定与背包背包分配)
  */
 function autoAllocateWeapons(intensity: string, currentTime: number, scenarioId: string) {
+  // 每一分钟的决策开始前，将上一分钟电磁软干扰（JAMMED）状态自动复位为正常通信。
+  // 只有导弹物理拦截（DESTROYED）是永久不可逆的。
+  db.exec({
+    sql: `UPDATE communication_windows SET link_status = 'TRANSMITTING' WHERE scenario_id = ? AND link_status = 'JAMMED'`,
+    bind: [scenarioId]
+  });
+
   // 1. 获取红方已被电子侦察发现的蓝方资产
   const assets: any[] = [];
   db.exec({
@@ -233,9 +240,16 @@ function autoAllocateWeapons(intensity: string, currentTime: number, scenarioId:
         const js = 10 * Math.log10((P_jam * attenuation_dist * attenuation_terrain * attenuation_alt * attenuation_vel * attenuation_att) / P_sig_recv);
         const final_js = Math.round(js * 100) / 100;
 
-        // 打击判定: 干信比超过接收机抗干扰等级为成功拦截
+        // 打击判定: 干信比超过接收机抗干扰等级且满足武器类别概率判定为成功拦截
         const threshold = asset.anti_jam_level || 50;
-        const isSuccessful = final_js >= threshold ? 1 : 0;
+        
+        let successProbability = 1.0;
+        if (selectedWeapon.category === 'CYBER') successProbability = 0.50; // 网络协议漏洞利用，成功率较低
+        else if (selectedWeapon.category === 'EW') successProbability = 0.65;   // 电磁波干扰易受方向和极化衰减，成功率一般
+        else if (selectedWeapon.category === 'DEW') successProbability = 0.80;  // EMP 强电磁脉冲压制成功率较高
+        else if (selectedWeapon.category === 'KINETIC') successProbability = 0.95; // 动能防空导弹物理拦截成功率极高
+
+        const isSuccessful = (final_js >= threshold && Math.random() <= successProbability) ? 1 : 0;
 
         const engageId = `engage-${selectedWeapon.id}-${asset.id}-${currentTime}`;
         const targetWindowId = connectedLinks[0].id;
