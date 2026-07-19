@@ -102,6 +102,8 @@ CREATE TABLE IF NOT EXISTS tactical_plans (
     total_delay_achieved INTEGER DEFAULT 0 NOT NULL,                        -- 方案累计造成的传输时效性剥夺总延迟 (秒)
     nodes_destroyed INTEGER DEFAULT 0 NOT NULL,                             -- 方案中被物理摧毁的关键节点数量
     final_score REAL DEFAULT 0.0 NOT NULL,                                  -- 方案总效能评估得分 (0-100)
+    timeline_collapse_ratios TEXT,                                          -- 时序链路压制率 JSON 数组
+    timeline_cumulative_costs TEXT,                                         -- 时序红方资源消耗 JSON 数组
 
     CONSTRAINT fk_plan_scenario FOREIGN KEY (scenario_id) REFERENCES scenarios(id) ON DELETE CASCADE,
     CONSTRAINT chk_intensity_level CHECK (intensity_level IN ('LOW', 'MEDIUM', 'HIGH')),

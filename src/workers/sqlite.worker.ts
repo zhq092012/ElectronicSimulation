@@ -20,7 +20,7 @@ async function initDb() {
     console.log('SQLite Wasm version:', sqlite3.version.libVersion);
     
     // 打开 OPFS 数据库 (如果不存在则自动创建)
-    db = new sqlite3.oo1.OpfsDb('/cema_wargame_v2.db', 'c');
+    db = new sqlite3.oo1.OpfsDb('/cema_wargame_v3.db', 'c');
     console.log('SQLite OPFS Database opened:', db.filename);
 
     // 逐句执行 schema.sql 初始化数据库表
@@ -142,11 +142,42 @@ function autoAllocateWeapons(intensity: string, currentTime: number, scenarioId:
 
       if (connectedLinks.length === 0) continue;
 
-      // 贪心匹配最适用的打击武器
+      // 贪心匹配最适用的打击武器（动态对武器进行战术适应性排序）
       let selectedWeapon: any = null;
       let computedDistance = 0;
 
-      for (const weapon of allowedWeapons) {
+      const candidateWeapons = [...allowedWeapons].sort((w1, w2) => {
+        // 1. 高烈度下，如果是天基卫星资产 (layer === 2)，优先分配 HQ-19 (KINETIC) 动能打击以实现物理摧毁
+        if (intensity === 'HIGH' && asset.layer === 2) {
+          if (w1.category === 'KINETIC' && w2.category !== 'KINETIC') return -1;
+          if (w2.category === 'KINETIC' && w1.category !== 'KINETIC') return 1;
+        }
+
+        const assetLat = asset.lat !== null ? asset.lat : 24.5;
+        const assetLng = asset.lng !== null ? asset.lng : 121.5;
+        const d1 = w1.category === 'CYBER' ? -1 : calculateDistance(w1.base_lat, w1.base_lng, assetLat, assetLng);
+        const d2 = w2.category === 'CYBER' ? -1 : calculateDistance(w2.base_lat, w2.base_lng, assetLat, assetLng);
+
+        // 2. 优先在射程内分配电磁脉冲武器 (DEW/EMP, range=200) 
+        const w1_is_emp_in_range = w1.category === 'DEW' && (w1.max_range === -1 || (d1 > 0 && d1 <= w1.max_range));
+        const w2_is_emp_in_range = w2.category === 'DEW' && (w2.max_range === -1 || (d2 > 0 && d2 <= w2.max_range));
+        if (w1_is_emp_in_range && !w2_is_emp_in_range) return -1;
+        if (w2_is_emp_in_range && !w1_is_emp_in_range) return 1;
+
+        // 3. 其次在射程内分配车载干扰器 (EW, range=380)
+        const w1_is_jammer_in_range = w1.category === 'EW' && (w1.max_range === -1 || (d1 > 0 && d1 <= w1.max_range));
+        const w2_is_jammer_in_range = w2.category === 'EW' && (w2.max_range === -1 || (d2 > 0 && d2 <= w2.max_range));
+        if (w1_is_jammer_in_range && !w2_is_jammer_in_range) return -1;
+        if (w2_is_jammer_in_range && !w1_is_jammer_in_range) return 1;
+
+        // 4. 最终将网络协议劫持 (CYBER) 作为全局保底手段
+        if (w1.category === 'CYBER' && w2.category !== 'CYBER') return 1;
+        if (w2.category === 'CYBER' && w1.category !== 'CYBER') return -1;
+
+        return 0;
+      });
+
+      for (const weapon of candidateWeapons) {
         if (weapon.inventory === 0) continue; // 弹药已耗尽
 
         let dist = -1;

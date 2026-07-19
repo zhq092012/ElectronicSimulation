@@ -253,7 +253,7 @@ import Battlefield3D from './components/Battlefield3D.vue';
 import WeaponAssignmentTable from './components/WeaponAssignmentTable.vue';
 import AfterActionReview from './components/AfterActionReview.vue';
 import SqlSandboxDialog from './components/SqlSandboxDialog.vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 
 // App state variables
 const isDbInitialized = ref(false);
@@ -506,7 +506,88 @@ const runOrbitCalculation = async () => {
 };
 
 const savePlan = async () => {
-  ElMessage.success('方案已保存至数据库，请进入战后效能复盘大屏对比查看。');
+  if (!isScenarioLoaded.value) {
+    ElMessage.warning('请先加载场景并进行交战推演！');
+    return;
+  }
+  try {
+    const { value } = await ElMessageBox.prompt('请输入保存方案的名称:', '保存对抗方案', {
+      confirmButtonText: '保存',
+      cancelButtonText: '取消',
+      inputPattern: /\S+/,
+      inputErrorMessage: '方案名称不能为空'
+    });
+    
+    if (!value) return;
+
+    // 1. 获取物理摧毁节点数
+    const destroyedRes = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM assets WHERE anti_jam_level = 0 AND side = 'BLUE'");
+    const nodes_destroyed = destroyedRes[0]?.cnt || 0;
+
+    // 2. 获取最终链路阻断率
+    const totalLinks = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM communication_windows");
+    const blockedLinks = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM communication_windows WHERE link_status IN ('JAMMED', 'DESTROYED')");
+    const tot = totalLinks[0]?.cnt || 0;
+    const blk = blockedLinks[0]?.cnt || 0;
+    const blockRate = tot > 0 ? Math.round((blk / tot) * 100) : 0;
+
+    // 3. 计算最终效能评估得分
+    const blockScore = blockRate;
+    const controlScore = Math.max(30, Math.round(100 - (budgetSpent.value / maxBudget.value) * 50)); 
+    const costEfficiency = Math.min(95, Math.round((totalDelay.value / (budgetSpent.value + 100)) * 6000));
+    const selfInterference = Math.max(20, Math.round(100 - (budgetSpent.value > 50000 ? 40 : 15)));
+    const final_score = Math.round((blockScore + controlScore + costEfficiency + selfInterference) / 4);
+
+    // 4. 计算时序曲线数据 (与 AAR 取样计算一致)
+    const timelineCollapseRatios: number[] = [];
+    const timelineCumulativeCosts: number[] = [];
+    for (let m = 0; m <= 50; m += 2) {
+      const t = 1781683200 + m * 60;
+      
+      const linksRes = await sqliteClient.query<any>(`
+        SELECT COUNT(*) as total, 
+               SUM(CASE WHEN link_status IN ('JAMMED', 'DESTROYED') THEN 1 ELSE 0 END) as blocked 
+        FROM communication_windows 
+        WHERE ? BETWEEN window_start AND window_end
+      `, [t]);
+      const totalCount = linksRes[0]?.total || 0;
+      const blockedCount = linksRes[0]?.blocked || 0;
+      const ratio = totalCount > 0 ? Math.round((blockedCount / totalCount) * 100) : 0;
+      timelineCollapseRatios.push(ratio);
+
+      const costRes = await sqliteClient.query<any>(`
+        SELECT SUM(w.action_cost) as total_cost 
+        FROM engagements e
+        JOIN weapons w ON e.weapon_id = w.id
+        WHERE e.action_time <= ?
+      `, [t]);
+      const cost = costRes[0]?.total_cost || 0;
+      timelineCumulativeCosts.push(cost);
+    }
+
+    const planId = `plan-${Date.now()}`;
+    await sqliteClient.execute(`
+      INSERT INTO tactical_plans (id, scenario_id, name, intensity_level, total_cost, total_delay_achieved, nodes_destroyed, final_score, timeline_collapse_ratios, timeline_cumulative_costs)
+      VALUES (?, 'scen-001', ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      planId,
+      value,
+      conflictIntensity.value,
+      budgetSpent.value,
+      totalDelay.value,
+      nodes_destroyed,
+      final_score,
+      JSON.stringify(timelineCollapseRatios),
+      JSON.stringify(timelineCumulativeCosts)
+    ]);
+
+    ElMessage.success(`方案“${value}”已成功保存！请进入战后效能复盘大屏对比查看。`);
+  } catch (err: any) {
+    if (err !== 'cancel') {
+      console.error(err);
+      ElMessage.error(`方案保存失败: ${err.message || err}`);
+    }
+  }
 };
 
 const onTimeStepChange = async (val: any) => {
@@ -584,8 +665,9 @@ const updateSmallRadar = async () => {
   if (!smallRadarChartRef.value) return;
   if (currentView.value !== 'SANDBOX') return;
   
-  if (!smallRadarChart) {
-    smallRadarChart = echarts.init(smallRadarChartRef.value, 'dark');
+  let chartInstance = echarts.getInstanceByDom(smallRadarChartRef.value);
+  if (!chartInstance) {
+    chartInstance = echarts.init(smallRadarChartRef.value, 'dark');
   }
 
   // Same logic as AAR
@@ -613,7 +695,7 @@ const updateSmallRadar = async () => {
       splitArea: { areaStyle: { color: ['rgba(0, 225, 255, 0.05)', 'rgba(0, 225, 255, 0.1)'] } },
       axisLine: { lineStyle: { color: 'rgba(0, 225, 255, 0.3)' } },
       splitLine: { lineStyle: { color: 'rgba(0, 225, 255, 0.3)' } },
-      name: { textStyle: { color: '#a0aec0', fontSize: 10 } }
+      axisName: { color: '#a0aec0', fontSize: 10 }
     },
     series: [
       {
@@ -629,7 +711,7 @@ const updateSmallRadar = async () => {
       }
     ]
   };
-  smallRadarChart.setOption(option);
+  chartInstance.setOption(option);
 };
 
 watch(currentView, () => {

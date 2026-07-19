@@ -29,8 +29,8 @@
         </el-table-column>
         <el-table-column label="动作" width="80">
           <template #default="{ row }">
-            <span :class="['action-type', row.action_type === 'DESTROY' ? 'destroy-type' : 'jam-type']">
-              {{ row.action_type === 'DESTROY' ? '硬摧毁' : '电磁干扰' }}
+            <span :class="['action-type', row.kill_type === 'HARD' ? 'destroy-type' : 'jam-type']">
+              {{ row.kill_type === 'HARD' ? '硬摧毁' : '电磁干扰' }}
             </span>
           </template>
         </el-table-column>
@@ -69,13 +69,14 @@ const fetchEngagements = async () => {
   // Find engagements active exactly at this minute
   try {
     const res = await sqliteClient.query<any>(`
-      SELECT e.*, w.name as weaponName, a.id as targetName, a.id as targetId 
+      SELECT e.*, w.name as weaponName, w.kill_type, 
+             (a_src.id || ' ↔ ' || a_tgt.id) as targetName
       FROM engagements e
       JOIN weapons w ON e.weapon_id = w.id
       JOIN communication_windows cw ON e.target_window_id = cw.id
-      JOIN assets a ON cw.target_id = a.id OR cw.source_id = a.id
+      JOIN assets a_src ON cw.source_id = a_src.id
+      JOIN assets a_tgt ON cw.target_id = a_tgt.id
       WHERE e.action_time = ?
-      GROUP BY e.id
     `, [props.currentTime]);
     activeEngagements.value = res;
   } catch (err) {
@@ -84,7 +85,7 @@ const fetchEngagements = async () => {
 };
 
 const tableRowClassName = ({ row }: { row: any }) => {
-  if (row.action_type === 'DESTROY') return 'bg-red-950/20';
+  if (row.kill_type === 'HARD') return 'bg-red-950/20';
   return 'bg-yellow-950/10';
 };
 

@@ -1,21 +1,43 @@
 <template>
   <div class="aar-panel">
-    <!-- Summary Cards Row -->
+    <!-- Plan Comparison Toolbar -->
+    <div class="comparison-toolbar tech-panel">
+      <div class="toolbar-header">
+        <span>复盘对比方案配置</span>
+        <span class="header-subtitle">Plan Comparison Config</span>
+      </div>
+      <div class="selector-row">
+        <div class="selector-item">
+          <span class="label-text">对比方案 A (蓝色/折线):</span>
+          <el-select v-model="selectedPlanA" placeholder="选择方案 A" size="small" style="width: 250px;" @change="onPlanChange">
+            <el-option v-for="p in availablePlans" :key="p.id" :label="p.name" :value="p.id" />
+          </el-select>
+        </div>
+        <div class="selector-item">
+          <span class="label-text">对比方案 B (红色/柱状):</span>
+          <el-select v-model="selectedPlanB" placeholder="选择方案 B" size="small" style="width: 250px;" @change="onPlanChange">
+            <el-option v-for="p in availablePlans" :key="p.id" :label="p.name" :value="p.id" />
+          </el-select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary Cards Row (Displays Stats for Plan A) -->
     <div class="summary-cards-row">
       <div class="summary-card tech-panel bg-gradient-red">
-        <div class="card-title">总计摧毁蓝方资产</div>
+        <div class="card-title">总计摧毁蓝方资产 (方案 A)</div>
         <div class="digital-font card-value text-red">{{ summary.destroyedCount }} 个</div>
       </div>
       <div class="summary-card tech-panel bg-gradient-cyan">
-        <div class="card-title">总计阻断成功率</div>
+        <div class="card-title">总计阻断成功率 (方案 A)</div>
         <div class="digital-font card-value text-cyan">{{ summary.blockRate }}%</div>
       </div>
       <div class="summary-card tech-panel bg-gradient-green">
-        <div class="card-title">红方累计弹药耗费</div>
+        <div class="card-title">红方累计弹药耗费 (方案 A)</div>
         <div class="digital-font card-value text-green">${{ formatNumber(summary.totalCost) }}</div>
       </div>
       <div class="summary-card tech-panel bg-gradient-yellow">
-        <div class="card-title">达成网络自愈时延</div>
+        <div class="card-title">达成网络自愈时延 (方案 A)</div>
         <div class="digital-font card-value text-yellow">{{ summary.totalDelay }} 秒</div>
       </div>
     </div>
@@ -34,8 +56,8 @@
       <!-- Right: Line + Bar Combo Chart -->
       <div class="chart-col-7 tech-panel">
         <div class="panel-header">
-          <span>时序链路压制率 vs 红方资源消耗</span>
-          <span class="header-subtitle">Timeline Performance & Budget</span>
+          <span>时序链路压制率 vs 红方资源消耗 对比</span>
+          <span class="header-subtitle">Timeline Performance & Budget Comparison</span>
         </div>
         <div ref="lineBarChartRef" class="chart-container"></div>
       </div>
@@ -54,7 +76,25 @@ const lineBarChartRef = ref<HTMLDivElement | null>(null);
 let radarChart: echarts.ECharts | null = null;
 let lineBarChart: echarts.ECharts | null = null;
 
-// Summary stats
+// Plan selection state
+const availablePlans = ref<any[]>([]);
+const selectedPlanA = ref('plan-001');
+const selectedPlanB = ref('plan-mock-kinetic');
+
+// Mock Comparison Plan
+const mockPlan = {
+  id: 'plan-mock-kinetic',
+  name: '参考对比组: 强力动能摧毁方案',
+  intensity_level: 'HIGH',
+  total_cost: 320000.0,
+  total_delay_achieved: 12000,
+  nodes_destroyed: 5,
+  final_score: 63.75,
+  timeline_collapse_ratios: JSON.stringify([0, 10, 20, 30, 40, 50, 60, 70, 80, 85, 90, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95]),
+  timeline_cumulative_costs: JSON.stringify([0, 12000, 24000, 36000, 60000, 96000, 144000, 180000, 216000, 240000, 260000, 280000, 300000, 320000, 320000, 320000, 320000, 320000, 320000, 320000, 320000, 320000, 320000, 320000, 320000, 320000])
+};
+
+// Summary stats (Displays stats for Plan A)
 const summary = ref({
   destroyedCount: 0,
   blockRate: 0,
@@ -67,84 +107,141 @@ const formatNumber = (num: number) => {
   return num.toLocaleString();
 };
 
+const onPlanChange = () => {
+  loadAndAggregateData();
+};
+
+// Retrieve timeline arrays for a given plan (dynamically queries if active/plan-001, otherwise parses stored JSON)
+const loadPlanTimeline = async (plan: any) => {
+  if (plan.id !== 'plan-001' && plan.timeline_collapse_ratios && plan.timeline_cumulative_costs) {
+    try {
+      return {
+        collapseRatios: JSON.parse(plan.timeline_collapse_ratios),
+        cumulativeCosts: JSON.parse(plan.timeline_cumulative_costs)
+      };
+    } catch (e) {
+      console.error("Failed to parse timeline JSON", e);
+    }
+  }
+
+  // Fallback/Dynamic calculation (primarily for active plan-001)
+  const collapseRatios: number[] = [];
+  const cumulativeCosts: number[] = [];
+  for (let m = 0; m <= 50; m += 2) {
+    const t = 1781683200 + m * 60;
+    
+    // Collapse ratio at this minute
+    const linksRes = await sqliteClient.query<any>(`
+      SELECT COUNT(*) as total, 
+             SUM(CASE WHEN link_status IN ('JAMMED', 'DESTROYED') THEN 1 ELSE 0 END) as blocked 
+      FROM communication_windows 
+      WHERE ? BETWEEN window_start AND window_end
+    `, [t]);
+    const totalCount = linksRes[0]?.total || 0;
+    const blockedCount = linksRes[0]?.blocked || 0;
+    const ratio = totalCount > 0 ? Math.round((blockedCount / totalCount) * 100) : 0;
+    collapseRatios.push(ratio);
+
+    // Cumulative cost up to this minute
+    const costRes = await sqliteClient.query<any>(`
+      SELECT SUM(w.action_cost) as total_cost 
+      FROM engagements e
+      JOIN weapons w ON e.weapon_id = w.id
+      WHERE e.action_time <= ?
+    `, [t]);
+    const cost = costRes[0]?.total_cost || 0;
+    cumulativeCosts.push(cost);
+  }
+  return { collapseRatios, cumulativeCosts };
+};
+
 // Aggregates data from SQLite Wasm and renders charts
 const loadAndAggregateData = async () => {
   if (!sqliteClient.isInitialized.value) {
     return;
   }
   try {
-    // 1. Fetch current plan performance metrics
-    const plans = await sqliteClient.query<any>("SELECT * FROM tactical_plans WHERE id = 'plan-001'");
-    let planA = { total_cost: 0, total_delay_achieved: 0, nodes_destroyed: 0 };
-    if (plans.length > 0) {
-      planA = plans[0];
-      summary.value.totalCost = planA.total_cost;
-      summary.value.totalDelay = planA.total_delay_achieved;
-      summary.value.destroyedCount = planA.nodes_destroyed;
+    // 1. Fetch all available plans in DB
+    const plansList = await sqliteClient.query<any>("SELECT * FROM tactical_plans");
+    availablePlans.value = [
+      ...plansList.map(p => ({
+        id: p.id,
+        name: p.id === 'plan-001' ? '当前实时推演方案' : p.name,
+        ...p
+      })),
+      mockPlan
+    ];
+
+    // Find currently selected plan objects
+    const planAObj = availablePlans.value.find(p => p.id === selectedPlanA.value) || availablePlans.value[0];
+    const planBObj = availablePlans.value.find(p => p.id === selectedPlanB.value) || mockPlan;
+
+    // Update Summary Stats for Plan A
+    summary.value.totalCost = planAObj.total_cost || 0;
+    summary.value.totalDelay = planAObj.total_delay_achieved || 0;
+    summary.value.destroyedCount = planAObj.nodes_destroyed || 0;
+
+    // Calculate final block rate for Plan A
+    if (planAObj.id === 'plan-001') {
+      const totalLinks = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM communication_windows");
+      const blockedLinks = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM communication_windows WHERE link_status IN ('JAMMED', 'DESTROYED')");
+      const tot = totalLinks[0]?.cnt || 0;
+      const blk = blockedLinks[0]?.cnt || 0;
+      summary.value.blockRate = tot > 0 ? Math.round((blk / tot) * 100) : 0;
+    } else {
+      const ratios = planAObj.timeline_collapse_ratios ? JSON.parse(planAObj.timeline_collapse_ratios) : [];
+      summary.value.blockRate = ratios.length > 0 ? ratios[ratios.length - 1] : 0;
     }
 
-    // Compute blocked rate
-    const totalLinks = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM communication_windows");
-    const blockedLinks = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM communication_windows WHERE link_status IN ('JAMMED', 'DESTROYED')");
-    const tot = totalLinks[0]?.cnt || 0;
-    const blk = blockedLinks[0]?.cnt || 0;
-    summary.value.blockRate = tot > 0 ? Math.round((blk / tot) * 100) : 0;
+    // Dynamic scores for Plan A
+    const blockScoreA = summary.value.blockRate;
+    const controlScoreA = Math.max(30, Math.round(100 - (summary.value.totalCost / 200000) * 50));
+    const costEfficiencyA = Math.min(95, Math.round((summary.value.totalDelay / (summary.value.totalCost + 100)) * 6000));
+    const selfInterferenceA = Math.max(20, Math.round(100 - (summary.value.totalCost > 50000 ? 40 : 15)));
+    const planAScores = [blockScoreA, controlScoreA, costEfficiencyA, selfInterferenceA];
 
-    // Calculate dynamic radar scores for Plan A (EW/Cyber Plan) based on current DB state
-    const blockScore = summary.value.blockRate;
-    const controlScore = Math.max(30, Math.round(100 - (summary.value.totalCost / 200000) * 50));
-    const costEfficiency = Math.min(95, Math.round((summary.value.totalDelay / (summary.value.totalCost + 100)) * 6000));
-    const selfInterference = Math.max(20, Math.round(100 - (summary.value.totalCost > 50000 ? 40 : 15)));
+    // Dynamic scores for Plan B
+    let blockRateB = 0;
+    if (planBObj.id === 'plan-mock-kinetic') {
+      blockRateB = 95;
+    } else if (planBObj.id === 'plan-001') {
+      const totalLinks = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM communication_windows");
+      const blockedLinks = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM communication_windows WHERE link_status IN ('JAMMED', 'DESTROYED')");
+      const tot = totalLinks[0]?.cnt || 0;
+      const blk = blockedLinks[0]?.cnt || 0;
+      blockRateB = tot > 0 ? Math.round((blk / tot) * 100) : 0;
+    } else {
+      const ratios = planBObj.timeline_collapse_ratios ? JSON.parse(planBObj.timeline_collapse_ratios) : [];
+      blockRateB = ratios.length > 0 ? ratios[ratios.length - 1] : 0;
+    }
 
-    const planAScores = [blockScore, controlScore, costEfficiency, selfInterference];
+    const blockScoreB = blockRateB;
+    const controlScoreB = Math.max(30, Math.round(100 - ((planBObj.total_cost || 0) / 200000) * 50));
+    const costEfficiencyB = Math.min(95, Math.round(((planBObj.total_delay_achieved || 0) / ((planBObj.total_cost || 0) + 100)) * 6000));
+    const selfInterferenceB = Math.max(20, Math.round(100 - ((planBObj.total_cost || 0) > 50000 ? 40 : 15)));
+    const planBScores = [blockScoreB, controlScoreB, costEfficiencyB, selfInterferenceB];
 
-    // Plan B (Mocked Kinetic missile strategy as comparison)
-    const planBScores = [95, 30, 45, 85];
+    // 2. Fetch Time Series data for both plans
+    const { collapseRatios: collapseA, cumulativeCosts: costA } = await loadPlanTimeline(planAObj);
+    const { collapseRatios: collapseB, cumulativeCosts: costB } = await loadPlanTimeline(planBObj);
 
-    // 2. Fetch Time Series data (Collapse % and cumulative cost per minute)
     const timelineLabels: string[] = [];
-    const collapseRatios: number[] = [];
-    const cumulativeCosts: number[] = [];
-
-    // Loop through 0 to 50 minutes of simulation
-    for (let m = 0; m <= 50; m += 2) { // step by 2 minutes for smoother rendering speed
-      const t = 1781683200 + m * 60;
+    for (let m = 0; m <= 50; m += 2) {
       timelineLabels.push(`${m} min`);
-
-      // Collapse ratio at this minute
-      const linksRes = await sqliteClient.query<any>(`
-        SELECT COUNT(*) as total, 
-               SUM(CASE WHEN link_status IN ('JAMMED', 'DESTROYED') THEN 1 ELSE 0 END) as blocked 
-        FROM communication_windows 
-        WHERE ? BETWEEN window_start AND window_end
-      `, [t]);
-      const totalCount = linksRes[0]?.total || 0;
-      const blockedCount = linksRes[0]?.blocked || 0;
-      const ratio = totalCount > 0 ? Math.round((blockedCount / totalCount) * 100) : 0;
-      collapseRatios.push(ratio);
-
-      // Cumulative cost up to this minute
-      const costRes = await sqliteClient.query<any>(`
-        SELECT SUM(w.action_cost) as total_cost 
-        FROM engagements e
-        JOIN weapons w ON e.weapon_id = w.id
-        WHERE e.action_time <= ?
-      `, [t]);
-      const cost = costRes[0]?.total_cost || 0;
-      cumulativeCosts.push(cost);
     }
 
-    renderRadar(planAScores, planBScores);
-    renderLineBar(timelineLabels, collapseRatios, cumulativeCosts);
+    renderRadar(planAScores, planBScores, planAObj.name, planBObj.name);
+    renderLineBar(timelineLabels, collapseA, costA, collapseB, costB, planAObj.name, planBObj.name);
   } catch (error) {
     console.error('Error aggregating AAR data:', error);
   }
 };
 
-const renderRadar = (planA: number[], planB: number[]) => {
+const renderRadar = (planA: number[], planB: number[], nameA: string, nameB: string) => {
   if (!radarChartRef.value) return;
-  if (!radarChart) {
-    radarChart = echarts.init(radarChartRef.value, 'dark');
+  let chartInstance = echarts.getInstanceByDom(radarChartRef.value);
+  if (!chartInstance) {
+    chartInstance = echarts.init(radarChartRef.value, 'dark');
   }
 
   const option = {
@@ -154,7 +251,7 @@ const renderRadar = (planA: number[], planB: number[]) => {
       trigger: 'item'
     },
     legend: {
-      data: ['方案一: 软压制网电干扰', '方案二: 强力动能摧毁'],
+      data: [nameA, nameB],
       textStyle: { color: '#c3d1e6', fontSize: 10 },
       bottom: 5
     },
@@ -162,8 +259,8 @@ const renderRadar = (planA: number[], planB: number[]) => {
       indicator: [
         { name: '链路阻断率 (Block Rate)', max: 100 },
         { name: '冲突控制度 (Conflict Control)', max: 100 },
-        { name: '效费性价比 (Cost Efficiency)', max: 100 },
-        { name: '红方自扰度 (Self Interference)', max: 100 }
+        { name: '效费比 (Cost Efficiency)', max: 100 },
+        { name: '己方自扰度 (Self Interference)', max: 100 }
       ],
       shape: 'polygon',
       splitNumber: 4,
@@ -192,14 +289,14 @@ const renderRadar = (planA: number[], planB: number[]) => {
         data: [
           {
             value: planA,
-            name: '方案一: 软压制网电干扰',
+            name: nameA,
             areaStyle: {
               color: 'rgba(0, 225, 255, 0.2)'
             }
           },
           {
             value: planB,
-            name: '方案二: 强力动能摧毁',
+            name: nameB,
             areaStyle: {
               color: 'rgba(255, 42, 95, 0.15)'
             }
@@ -209,13 +306,22 @@ const renderRadar = (planA: number[], planB: number[]) => {
     ]
   };
 
-  radarChart.setOption(option);
+  chartInstance.setOption(option, true);
 };
 
-const renderLineBar = (labels: string[], collapse: number[], cost: number[]) => {
+const renderLineBar = (
+  labels: string[],
+  collapseA: number[],
+  costA: number[],
+  collapseB: number[],
+  costB: number[],
+  nameA: string,
+  nameB: string
+) => {
   if (!lineBarChartRef.value) return;
-  if (!lineBarChart) {
-    lineBarChart = echarts.init(lineBarChartRef.value, 'dark');
+  let chartInstance = echarts.getInstanceByDom(lineBarChartRef.value);
+  if (!chartInstance) {
+    chartInstance = echarts.init(lineBarChartRef.value, 'dark');
   }
 
   const option = {
@@ -230,15 +336,15 @@ const renderLineBar = (labels: string[], collapse: number[], cost: number[]) => 
       }
     },
     legend: {
-      data: ['蓝方带宽瘫痪比例 (%)', '红方资源累计消耗 ($)'],
-      textStyle: { color: '#c3d1e6', fontSize: 10 },
-      bottom: 5
+      data: [`${nameA}: 链路阻断率 (%)`, `${nameB}: 链路阻断率 (%)`, `${nameA}: 资源消耗 ($)`, `${nameB}: 资源消耗 ($)`],
+      textStyle: { color: '#c3d1e6', fontSize: 9 },
+      bottom: 0
     },
     grid: {
       top: '15%',
       left: '10%',
       right: '10%',
-      bottom: '15%'
+      bottom: '18%'
     },
     xAxis: [
       {
@@ -254,7 +360,7 @@ const renderLineBar = (labels: string[], collapse: number[], cost: number[]) => 
     yAxis: [
       {
         type: 'value',
-        name: '瘫痪比例',
+        name: '链路阻断率',
         min: 0,
         max: 100,
         interval: 20,
@@ -268,7 +374,7 @@ const renderLineBar = (labels: string[], collapse: number[], cost: number[]) => 
       },
       {
         type: 'value',
-        name: '资源开支',
+        name: '资源消耗 ($)',
         axisLabel: {
           formatter: '${value}',
           color: '#c3d1e6',
@@ -280,10 +386,10 @@ const renderLineBar = (labels: string[], collapse: number[], cost: number[]) => 
     ],
     series: [
       {
-        name: '红方资源累计消耗 ($)',
+        name: `${nameA}: 资源消耗 ($)`,
         type: 'bar',
         yAxisIndex: 1,
-        data: cost,
+        data: costA,
         itemStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: '#10b981' },
@@ -292,9 +398,21 @@ const renderLineBar = (labels: string[], collapse: number[], cost: number[]) => 
         }
       },
       {
-        name: '蓝方带宽瘫痪比例 (%)',
+        name: `${nameB}: 资源消耗 ($)`,
+        type: 'bar',
+        yAxisIndex: 1,
+        data: costB,
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: '#f43f5e' },
+            { offset: 1, color: '#be123c' }
+          ])
+        }
+      },
+      {
+        name: `${nameA}: 链路阻断率 (%)`,
         type: 'line',
-        data: collapse,
+        data: collapseA,
         itemStyle: {
           color: '#00e1ff'
         },
@@ -303,11 +421,24 @@ const renderLineBar = (labels: string[], collapse: number[], cost: number[]) => 
           shadowColor: 'rgba(0, 225, 255, 0.5)',
           shadowBlur: 5
         }
+      },
+      {
+        name: `${nameB}: 链路阻断率 (%)`,
+        type: 'line',
+        data: collapseB,
+        itemStyle: {
+          color: '#ff2a5f'
+        },
+        lineStyle: {
+          width: 2.5,
+          shadowColor: 'rgba(255, 42, 95, 0.5)',
+          shadowBlur: 5
+        }
       }
     ]
   };
 
-  lineBarChart.setOption(option);
+  chartInstance.setOption(option, true);
 };
 
 onMounted(() => {
@@ -323,13 +454,13 @@ watch(() => sqliteClient.isInitialized.value, (init) => {
 });
 
 onBeforeUnmount(() => {
-  if (radarChart) {
-    radarChart.dispose();
-    radarChart = null;
+  if (radarChartRef.value) {
+    const instance = echarts.getInstanceByDom(radarChartRef.value);
+    if (instance) instance.dispose();
   }
-  if (lineBarChart) {
-    lineBarChart.dispose();
-    lineBarChart = null;
+  if (lineBarChartRef.value) {
+    const instance = echarts.getInstanceByDom(lineBarChartRef.value);
+    if (instance) instance.dispose();
   }
 });
 </script>
@@ -348,6 +479,44 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.comparison-toolbar {
+  padding: 12px 16px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  
+  .toolbar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(0, 225, 255, 0.1);
+    padding-bottom: 4px;
+    
+    span {
+      font-size: 14px;
+      font-weight: bold;
+      color: #00e1ff;
+    }
+  }
+  
+  .selector-row {
+    display: flex;
+    gap: 32px;
+    
+    .selector-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      
+      .label-text {
+        font-size: 12px;
+        color: $text-dim;
+      }
+    }
+  }
+}
+
 .summary-cards-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -359,6 +528,7 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   background-color: rgba(8, 12, 22, 0.5);
   box-shadow: 0 0 10px rgba(0, 225, 255, 0.03);
+  border: 1px solid rgba(0, 225, 255, 0.1);
 }
 
 .summary-card {
