@@ -312,7 +312,8 @@ const formatTime = (ts: number) => {
   return date.toISOString().replace('T', ' ').substring(0, 19);
 };
 
-const formatNumber = (num: number) => {
+const formatNumber = (num: number | null | undefined) => {
+  if (num === null || num === undefined) return '0';
   return num.toLocaleString();
 };
 
@@ -564,6 +565,7 @@ onBeforeUnmount(() => {
 });
 
 const selectEntity = async (id: string, type: 'ASSET' | 'WEAPON') => {
+  selectedEntity.value = null; // Clear old entity to avoid asynchronous UI rendering race conditions
   selectedType.value = type;
   try {
     if (type === 'ASSET') {
