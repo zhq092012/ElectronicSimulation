@@ -5,13 +5,12 @@
 export const seedMockData = async (sqliteClient: any): Promise<void> => {
   console.log('开始执行兵棋推演数据初始化...');
   
-  // 1. 清空各表旧数据 (遵循外键删除级联关系)
-  await sqliteClient.execute('DELETE FROM engagements');
-  await sqliteClient.execute('DELETE FROM tactical_plans');
+  // 1. 清空当前推演相关的表和数据 (不删除 scenarios 和用户保存的 tactical_plans)
+  await sqliteClient.execute("DELETE FROM engagements WHERE plan_id = 'plan-001'");
+  await sqliteClient.execute("DELETE FROM tactical_plans WHERE id = 'plan-001'");
   await sqliteClient.execute('DELETE FROM communication_windows');
   await sqliteClient.execute('DELETE FROM weapons');
   await sqliteClient.execute('DELETE FROM assets');
-  await sqliteClient.execute('DELETE FROM scenarios');
 
   // 2. 插入战役场景场景记录 (scen-001, 时长 50 分钟)
   // 开始时间设定为 1781683200 (2026年7月18日 08:00:00 UTC)
@@ -19,7 +18,7 @@ export const seedMockData = async (sqliteClient: any): Promise<void> => {
   const endTime = startTime + 50 * 60; // 50分钟后 (3000秒)
   
   await sqliteClient.execute(`
-    INSERT INTO scenarios (id, name, min_lat, max_lat, min_lng, max_lng, start_time, end_time, max_budget, time_step_seconds)
+    INSERT OR IGNORE INTO scenarios (id, name, min_lat, max_lat, min_lng, max_lng, start_time, end_time, max_budget, time_step_seconds)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     'scen-001', '海峡东部多域对空电磁对抗演练 (Sprint 3)', 
@@ -80,7 +79,7 @@ export const seedMockData = async (sqliteClient: any): Promise<void> => {
   // 5. 插入初始作战计划
   await sqliteClient.execute(`
     INSERT INTO tactical_plans (id, scenario_id, name, intensity_level, total_cost, total_delay_achieved, nodes_destroyed, final_score)
-    VALUES ('plan-001', 'scen-001', '跨域多维阻断与压制方案', 'MEDIUM', 0.0, 0, 0, 0.0)
+    VALUES ('plan-001', 'scen-001', '当前实时推演方案', 'MEDIUM', 0.0, 0, 0, 0.0)
   `);
 
   // 6. 插入骨干链路 (静态网状连线)
