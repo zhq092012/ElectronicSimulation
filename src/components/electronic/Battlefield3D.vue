@@ -5,7 +5,9 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, onBeforeUnmount } from 'vue';
 import ForceGraph3D from '3d-force-graph';
+import type { ForceGraph3DInstance } from '3d-force-graph';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import SpriteText from 'three-spritetext';
 
 const props = defineProps<{
@@ -18,16 +20,20 @@ const emit = defineEmits<{
 }>();
 
 const container = ref<HTMLDivElement | null>(null);
-let Graph: any = null;
+let Graph: ForceGraph3DInstance | null = null;
 let resizeObserver: ResizeObserver | null = null;
 
 onMounted(() => {
   if (!container.value) return;
 
-  Graph = (ForceGraph3D as any)()(container.value)
-    .graphData({ 
-      nodes: JSON.parse(JSON.stringify(props.nodes)), 
-      links: JSON.parse(JSON.stringify(props.links)) 
+  // 临时修改默认向上向量为 Z 轴，确保内部相机和 OrbitControls 的 Up 轴一致，防止旋转冲突锁死
+  const originalDefaultUp = THREE.Object3D.DEFAULT_UP.clone();
+  THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
+
+  Graph = new ForceGraph3D(container.value, { controlType: 'orbit' })
+    .graphData({
+      nodes: JSON.parse(JSON.stringify(props.nodes)),
+      links: JSON.parse(JSON.stringify(props.links))
     })
     .backgroundColor('rgba(8, 12, 22, 0.0)')
     .showNavInfo(false)
@@ -92,8 +98,11 @@ onMounted(() => {
       emit('select-node', node.id, type);
     });
 
+  // 恢复默认的向上向量为 Y 轴，避免污染其他组件
+  THREE.Object3D.DEFAULT_UP.copy(originalDefaultUp);
+
   // Force Directed Layout & Bounding Box
-  Graph.onEngineTick(() => {
+  Graph!.onEngineTick(() => {
     if (!Graph) return;
     const data = Graph.graphData();
     if (!data || !data.nodes) return;
@@ -110,7 +119,7 @@ onMounted(() => {
     });
   });
 
-  const scene = Graph.scene();
+  const scene = Graph!.scene();
 
   const gridConfigs = [
     { z: 150, color: '#00e1ff', opacity: 0.15 },  // 太空网格 (Space)
@@ -132,9 +141,9 @@ onMounted(() => {
   });
 
   // Custom 3D Objects with Labels
-  Graph.nodeThreeObject((node: any) => {
+  Graph!.nodeThreeObject((node: any) => {
     const isDestroyed = node.anti_jam_level === 0 && node.base_priority === 0;
-    
+
     let color = node.side === 'RED' ? '#ff2a5f' : '#00e1ff';
     if (isDestroyed) {
       color = '#374151'; // Destroyed goes dark
@@ -178,7 +187,7 @@ onMounted(() => {
     const usageStr = node.usage_type === 'MILITARY' ? '(军用)' : node.usage_type === 'CIVIL_COMMERCIAL' ? '(民用)' : '';
     const classStr = node.asset_class ? `[${node.asset_class}]` : '';
     const nameStr = node.name || node.id;
-    
+
     const label = new SpriteText(`${nameStr}\n${classStr} ${usageStr}`);
     label.color = node.side === 'RED' ? '#ff87a3' : '#a5f3fc';
     label.textHeight = 3.5;
@@ -188,19 +197,63 @@ onMounted(() => {
     return group;
   });
 
+  // 视角模式配置：
+  // 1. 当 FIXED_VIEW_MODE = false 时，为视角调试模式，您可以在页面上自由用鼠标拖拽相机。
+  //    此时浏览器控制台（F12 Console）会实时输出相机的位置（Position）和目标点（Target），以及极角（纬度）/方位角（经度）。
+  // 2. 当您用鼠标调整到最佳视角后，请把控制台输出的 Position 和 Target 复制并填入下方的 BEST_VIEW 中。
+  //    然后将 FIXED_VIEW_MODE 改为 true 即可完全固定该视角，后面三维场景将不可被鼠标拖拽转动。
+  const FIXED_VIEW_MODE = true;
+  const BEST_VIEW = {
+    position: { x: -18.50, y: -734.86, z: 55.09 }, // 默认视角，请在此填入找到的最佳 Camera Position
+    target: { x: 0, y: 0, z: 0 }        // 默认目标点，请在此填入找到的最佳 Target Position
+  };
+
   // Fixed 45-degree isometric initial camera with Z-up logic
-  const camera = Graph.camera();
-  const controls = Graph.controls();
-  
+  const camera = Graph!.camera();
+  const controls = Graph!.controls() as OrbitControls;
+
   if (camera && controls) {
     // Set Z as the logical vertical up axis
     camera.up.set(0, 0, 1);
-    
-    // Position camera to look at the center from an angle
-    Graph.cameraPosition({ x: 0, y: -450, z: 250 }, { x: 0, y: 0, z: 0 }, 1000);
-    
-    // Enable free rotation and panning
-    controls.enablePan = true;
+
+    if (FIXED_VIEW_MODE) {
+      // 锁定视角模式：完全锁定视角，不允许旋转和位移
+      controls.enableRotate = false;
+      controls.enablePan = false;
+      controls.enableZoom = true; // 允许鼠标滚轮缩放，如需彻底禁用缩放可设为 false
+
+      // 立即定位到最佳固定视角
+      Graph.cameraPosition(BEST_VIEW.position, BEST_VIEW.target, 0);
+    } else {
+      // 调试视角模式：允许自由操作，并实时输出经纬度及笛卡尔视角参数
+      controls.enablePan = true;
+      controls.enableRotate = true;
+      controls.enableZoom = true;
+
+      // 限制极角以防底朝天
+      controls.minPolarAngle = Math.PI / 6;
+      controls.maxPolarAngle = Math.PI / 2.1;
+
+      // 启用阻尼
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+
+      // Position camera to look at the center from an angle
+      Graph.cameraPosition(BEST_VIEW.position, BEST_VIEW.target, 1000);
+
+      // 监听相机视角变化并实时打印
+      controls.addEventListener('change', () => {
+        const polar = controls.getPolarAngle();
+        const azimuthal = controls.getAzimuthalAngle();
+        console.log(
+          `[最佳视角调试器]\n` +
+          `  - cameraPosition: { x: ${camera.position.x.toFixed(2)}, y: ${camera.position.y.toFixed(2)}, z: ${camera.position.z.toFixed(2)} }\n` +
+          `  - target: { x: ${controls.target.x.toFixed(2)}, y: ${controls.target.y.toFixed(2)}, z: ${controls.target.z.toFixed(2)} }\n` +
+          `  - 极角 (纬度 phi): ${(polar * 180 / Math.PI).toFixed(2)}° (${polar.toFixed(4)} rad)\n` +
+          `  - 方位角 (经度 theta): ${(azimuthal * 180 / Math.PI).toFixed(2)}° (${azimuthal.toFixed(4)} rad)`
+        );
+      });
+    }
     controls.update();
   }
 

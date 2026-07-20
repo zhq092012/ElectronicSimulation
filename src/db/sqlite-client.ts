@@ -108,9 +108,10 @@ class SQLiteClient {
 
   /**
    * 触发 Web Worker 中的自动化武器分配及交战结算
+   * @param scenarioEndTime 场景结束时间戳 (Unix)，用于计算 HARD kill 剩余破坏时长
    */
-  public allocateWeapons(intensity: string, currentTime: number, scenarioId: string): Promise<{ engagements_created: number }> {
-    return this.send<{ engagements_created: number }>('AUTO_ALLOCATE_WEAPONS', '', [{ intensity, currentTime, scenarioId }]);
+  public allocateWeapons(intensity: string, currentTime: number, scenarioId: string, scenarioEndTime: number): Promise<{ engagements_created: number }> {
+    return this.send<{ engagements_created: number }>('AUTO_ALLOCATE_WEAPONS', '', [{ intensity, currentTime, scenarioId, scenarioEndTime }]);
   }
 }
 

@@ -4,7 +4,6 @@
     <div class="comparison-toolbar tech-panel">
       <div class="toolbar-header">
         <span>复盘对比方案配置</span>
-        <span class="header-subtitle">Plan Comparison Config</span>
       </div>
       <div class="selector-row">
         <div class="selector-item">
@@ -41,8 +40,8 @@
             <span class="value-unit" v-if="hasPlanB"> 个</span>
           </div>
           <div class="card-sub-labels" v-if="hasPlanB">
-            <span class="sub-label text-cyan-dim">方案 A</span>
-            <span class="sub-label text-red-dim">方案 B</span>
+            <span class="sub-label text-cyan-dim">方案 A </span>
+            <span class="sub-label text-red-dim"> 方案 B</span>
           </div>
         </div>
       </div>
@@ -73,7 +72,7 @@
             <span class="digital-font card-value text-cyan">${{ formatNumber(summaryA.totalCost) }}</span>
             <span class="value-divider" v-if="hasPlanB"> / </span>
             <span class="digital-font card-value text-red" v-if="hasPlanB">${{ formatNumber(summaryB.totalCost)
-              }}</span>
+            }}</span>
           </div>
           <div class="card-sub-labels" v-if="hasPlanB">
             <span class="sub-label text-cyan-dim">方案 A</span>
@@ -107,7 +106,7 @@
       <div class="chart-col-5 tech-panel">
         <div class="panel-header">
           <span>兵棋推演多维方案效能对比</span>
-          <span class="header-subtitle">Plan Radar Analysis</span>
+
         </div>
         <div ref="radarChartRef" class="chart-container"></div>
       </div>
@@ -116,7 +115,7 @@
       <div class="chart-col-7 tech-panel">
         <div class="panel-header">
           <span>时序链路压制率 vs 红方资源消耗 对比</span>
-          <span class="header-subtitle">Timeline Performance & Budget Comparison</span>
+
         </div>
         <div ref="lineBarChartRef" class="chart-container"></div>
       </div>
@@ -127,7 +126,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import * as echarts from 'echarts';
-import { sqliteClient } from '../db/sqlite-client';
+import { sqliteClient } from '@/db/sqlite-client';
 
 const radarChartRef = ref<HTMLDivElement | null>(null);
 const lineBarChartRef = ref<HTMLDivElement | null>(null);
@@ -230,7 +229,7 @@ const loadAndAggregateData = async () => {
       // Reset summary values
       summaryA.value = { destroyedCount: 0, blockRate: 0, totalCost: 0, totalDelay: 0 };
       summaryB.value = { destroyedCount: 0, blockRate: 0, totalCost: 0, totalDelay: 0 };
-      
+
       // Clear charts if they exist
       if (radarChartRef.value) {
         const instance = echarts.getInstanceByDom(radarChartRef.value);
@@ -261,10 +260,13 @@ const loadAndAggregateData = async () => {
     }
 
     // Dynamic scores for Plan A
+    const calcCostEfficiency = (delay: number, cost: number) => Math.min(95, Math.max(25, Math.round((delay / (cost + 1000)) * 1200)));
+    const calcSelfInterference = (cost: number, destroyed: number) => Math.min(95, Math.max(30, Math.round(60 + (destroyed * 12) - (cost / 400000) * 20)));
+
     const blockScoreA = summaryA.value.blockRate;
-    const controlScoreA = Math.max(30, Math.round(100 - (summaryA.value.totalCost / 200000) * 50));
-    const costEfficiencyA = Math.min(95, Math.round((summaryA.value.totalDelay / (summaryA.value.totalCost + 100)) * 6000));
-    const selfInterferenceA = Math.max(20, Math.round(100 - (summaryA.value.totalCost > 50000 ? 40 : 15)));
+    const controlScoreA = Math.max(30, Math.round(100 - (summaryA.value.totalCost / 300000) * 40));
+    const costEfficiencyA = calcCostEfficiency(summaryA.value.totalDelay, summaryA.value.totalCost);
+    const selfInterferenceA = calcSelfInterference(summaryA.value.totalCost, summaryA.value.destroyedCount);
     const planAScores = [blockScoreA, controlScoreA, costEfficiencyA, selfInterferenceA];
 
     // Dynamic scores for Plan B (if selected)
@@ -286,9 +288,9 @@ const loadAndAggregateData = async () => {
       }
 
       const blockScoreB = summaryB.value.blockRate;
-      const controlScoreB = Math.max(30, Math.round(100 - (summaryB.value.totalCost / 200000) * 50));
-      const costEfficiencyB = Math.min(95, Math.round((summaryB.value.totalDelay / (summaryB.value.totalCost + 100)) * 6000));
-      const selfInterferenceB = Math.max(20, Math.round(100 - (summaryB.value.totalCost > 50000 ? 40 : 15)));
+      const controlScoreB = Math.max(30, Math.round(100 - (summaryB.value.totalCost / 300000) * 40));
+      const costEfficiencyB = calcCostEfficiency(summaryB.value.totalDelay, summaryB.value.totalCost);
+      const selfInterferenceB = calcSelfInterference(summaryB.value.totalCost, summaryB.value.destroyedCount);
       planBScores = [blockScoreB, controlScoreB, costEfficiencyB, selfInterferenceB];
     }
 
@@ -560,7 +562,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
-@import "../styles/theme.scss";
+@import "@/styles/theme.scss";
 
 .aar-panel {
   flex: 1;
@@ -670,7 +672,6 @@ onBeforeUnmount(() => {
 
 .card-sub-labels {
   display: flex;
-  justify-content: space-between;
   margin-top: 2px;
   font-size: 9px;
 
@@ -680,6 +681,7 @@ onBeforeUnmount(() => {
 
   .text-red-dim {
     color: rgba(255, 42, 95, 0.7);
+    padding-left: 10px;
   }
 }
 
@@ -730,10 +732,7 @@ onBeforeUnmount(() => {
   flex: none;
 }
 
-.header-subtitle {
-  font-size: 12px;
-  color: $text-dim;
-}
+
 
 .chart-container {
   flex: 1;

@@ -2,15 +2,9 @@
   <div class="weapon-assignment-container">
     <div class="panel-header">
       <span>实时兵力分配清单</span>
-      <span class="header-subtitle">Force Assignment Table</span>
     </div>
     <div class="table-wrapper">
-      <el-table 
-        :data="activeEngagements" 
-        size="small" 
-        height="100%" 
-        :row-class-name="tableRowClassName"
-      >
+      <el-table :data="activeEngagements" size="small" height="100%" :row-class-name="tableRowClassName">
         <el-table-column label="交战状态" width="80" align="center">
           <template #default="{ row }">
             <span v-if="row.is_successful" class="status-icon success-icon">💥</span>
@@ -49,7 +43,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue';
-import { sqliteClient } from '../db/sqlite-client';
+import { sqliteClient } from '@/db/sqlite-client';
 
 const props = defineProps<{
   currentTime: number; // Unix timestamp for current sim tick
@@ -65,7 +59,7 @@ const fetchEngagements = async () => {
     activeEngagements.value = [];
     return;
   }
-  
+
   // Find engagements active exactly at this minute
   try {
     const res = await sqliteClient.query<any>(`
@@ -95,7 +89,7 @@ onMounted(fetchEngagements);
 </script>
 
 <style scoped lang="scss">
-@import "../styles/theme.scss";
+@import "@/styles/theme.scss";
 
 .weapon-assignment-container {
   width: 100%;
@@ -103,11 +97,6 @@ onMounted(fetchEngagements);
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-.header-subtitle {
-  font-size: 12px;
-  color: $text-dim;
 }
 
 .table-wrapper {
@@ -123,12 +112,12 @@ onMounted(fetchEngagements);
   font-weight: bold;
   font-size: 18px; // text-lg
   display: inline-block;
-  
+
   &.success-icon {
     color: #ef4444; // text-red-500
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
-  
+
   &.pending-icon {
     color: #eab308; // text-yellow-500
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -149,6 +138,7 @@ onMounted(fetchEngagements);
   &.destroy-type {
     color: #ef4444; // text-red-500
   }
+
   &.jam-type {
     color: #facc15; // text-yellow-400
   }
@@ -162,9 +152,12 @@ onMounted(fetchEngagements);
 }
 
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: .5;
   }
@@ -174,17 +167,21 @@ onMounted(fetchEngagements);
   background-color: transparent !important;
   color: #a0aec0;
 }
+
 :deep(.el-table th.el-table__cell) {
   background-color: rgba(15, 23, 42, 0.8) !important;
   border-bottom: 1px solid rgba(6, 182, 212, 0.3);
   color: #22d3ee;
 }
+
 :deep(.el-table tr) {
   background-color: transparent !important;
 }
+
 :deep(.el-table td.el-table__cell) {
   border-bottom: 1px solid rgba(6, 182, 212, 0.1);
 }
+
 :deep(.el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell) {
   background-color: rgba(6, 182, 212, 0.1) !important;
 }

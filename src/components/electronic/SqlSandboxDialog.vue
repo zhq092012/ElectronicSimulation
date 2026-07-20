@@ -1,13 +1,8 @@
 <template>
   <el-dialog v-model="visible" title="SQLite Wasm 实时 SQL 沙箱" width="800px" top="5vh">
     <div class="sandbox-container">
-      <el-input
-        v-model="sqlQuery"
-        type="textarea"
-        :rows="5"
-        placeholder="请输入任何标准的 SQL 查询语句..."
-        class="sql-input-area"
-      />
+      <el-input v-model="sqlQuery" type="textarea" :rows="5" placeholder="请输入任何标准的 SQL 查询语句..."
+        class="sql-input-area" />
       <div class="actions-row">
         <span class="info-text">直接在此处对底层数据库进行自由探查</span>
         <el-button type="primary" size="small" @click="runQuery">
@@ -21,18 +16,13 @@
         <div v-if="sqlError" class="error-message">
           [Error]: {{ sqlError }}
         </div>
-        
+
         <!-- Result Table -->
         <el-table v-else-if="sqlResults.length > 0" :data="sqlResults" size="small" height="300px">
-          <el-table-column
-            v-for="col in Object.keys(sqlResults[0] || {})"
-            :key="col"
-            :prop="col"
-            :label="col"
-            show-overflow-tooltip
-          />
+          <el-table-column v-for="col in Object.keys(sqlResults[0] || {})" :key="col" :prop="col" :label="col"
+            show-overflow-tooltip />
         </el-table>
-        
+
         <div v-else class="empty-text">暂无查询结果，执行 SQL 查询后在此展示。</div>
       </div>
     </div>
@@ -41,7 +31,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { sqliteClient } from '../db/sqlite-client';
+import { sqliteClient } from '@/db/sqlite-client';
 
 const visible = ref(false);
 const sqlQuery = ref("SELECT * FROM assets LIMIT 10;");
@@ -69,7 +59,7 @@ defineExpose({
 </script>
 
 <style scoped lang="scss">
-@import "../styles/theme.scss";
+@import "@/styles/theme.scss";
 
 .sandbox-container {
   display: flex;

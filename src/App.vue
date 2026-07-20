@@ -3,7 +3,7 @@
     <!-- Top Sci-Fi Header -->
     <header class="app-header tech-panel">
       <div class="header-left">
-        <div class="header-logo glow-text-cyan">CEMA SIM PLATFORM V1.0</div>
+        <div class="header-logo glow-text-cyan">电子对抗推演模拟</div>
 
         <!-- View Switcher Tabs -->
         <nav class="nav-tabs">
@@ -31,7 +31,8 @@
           <span class="label-text">数据库状态:</span>
           <span class="db-status-container">
             <span :class="['status-dot', isDbInitialized ? 'status-green' : 'status-red']"></span>
-            <span class="status-text digital-font">{{ isDbInitialized ? 'SQLite-Wasm (OPFS)' : '连接中...' }}</span>
+            <span class="status-text digital-font">{{ isDbInitialized ? 'SQLite-Wasm (OPFS)' : '连接中...'
+            }}</span>
           </span>
         </div>
         <el-button size="small" type="primary" plain @click="openSqlSandbox">
@@ -49,7 +50,6 @@
         <div class="tech-panel config-panel">
           <div class="panel-header">
             <span>战术参数设定</span>
-            <span class="header-subtitle">Tactical Config</span>
           </div>
           <el-form label-position="left" label-width="90px" class="config-form">
             <el-form-item label="交战烈度:" class="form-item-intensity">
@@ -118,7 +118,6 @@
         <div class="tech-panel timeline-panel">
           <div class="panel-header">
             <span>动态推演时间轴</span>
-            <span class="header-subtitle digital-font">Timeline</span>
           </div>
           <div ref="timelineContainer" class="timeline-log-container">
             <el-timeline v-if="filteredLogs.length > 0">
@@ -159,7 +158,6 @@
         <div class="tech-panel radar-card">
           <div class="panel-header">
             <span>综合效能动态评估</span>
-            <span class="header-subtitle">Live BDA Radar</span>
           </div>
           <div ref="smallRadarChartRef" class="small-radar-container"></div>
         </div>
@@ -173,7 +171,6 @@
         <div class="tech-panel inspector-card">
           <div class="panel-header">
             <span>实体信息探针</span>
-            <span class="header-subtitle">Entity Inspector</span>
           </div>
 
           <div class="inspector-details">
@@ -182,7 +179,9 @@
                 <span class="entity-name">{{ selectedEntity.name || selectedEntity.id }}</span>
                 <span
                   :class="['side-tag', (selectedType === 'WEAPON' || selectedEntity.side === 'RED') ? 'red-side' : 'blue-side']">
-                  {{ (selectedType === 'WEAPON' || selectedEntity.side === 'RED') ? (selectedType === 'WEAPON' ? '红方武器'
+                  {{ (selectedType === 'WEAPON' || selectedEntity.side === 'RED') ? (selectedType ===
+                    'WEAPON' ?
+                    '红方武器'
                     :
                     '红方资产') : '蓝方资产' }}
                 </span>
@@ -190,14 +189,17 @@
 
               <!-- Asset Detail Table -->
               <div v-if="selectedType === 'ASSET'" class="info-grid">
-                <div><span class="label-dim">实体类型:</span> <span class="digital-font">{{ selectedEntity.asset_class
-                }}</span>
+                <div><span class="label-dim">实体类型:</span> <span class="digital-font">{{
+                  selectedEntity.asset_class
+                    }}</span>
                 </div>
-                <div><span class="label-dim">核心功能:</span> <span class="digital-font">{{ selectedEntity.func_type
-                }}</span>
+                <div><span class="label-dim">核心功能:</span> <span class="digital-font">{{
+                  selectedEntity.func_type
+                    }}</span>
                 </div>
-                <div><span class="label-dim">所有权:</span> <span class="digital-font">{{ selectedEntity.usage_type
-                }}</span>
+                <div><span class="label-dim">所有权:</span> <span class="digital-font">{{
+                  selectedEntity.usage_type
+                    }}</span>
                 </div>
                 <div><span class="label-dim">空间分层:</span> <span class="digital-font">{{
                   getLayerLabel(selectedEntity.layer)
@@ -207,8 +209,10 @@
                 <div><span class="label-dim">目标价值:</span> <span class="digital-font value-cyan">{{
                   selectedEntity.base_priority }}</span></div>
                 <div class="grid-col-full"><span class="label-dim">三维坐标:</span> <span class="digital-font">L:{{
-                  selectedEntity.lat ? selectedEntity.lat.toFixed(2) : '计算中' }},{{ selectedEntity.lng ?
-                      selectedEntity.lng.toFixed(2) : '计算中' }} A:{{ selectedEntity.alt || 0 }}km</span></div>
+                  selectedEntity.lat ? selectedEntity.lat.toFixed(2) : '计算中' }},{{
+                      selectedEntity.lng ?
+                        selectedEntity.lng.toFixed(2) : '计算中' }} A:{{ selectedEntity.alt || 0
+                    }}km</span></div>
                 <div class="grid-col-full">
                   <span class="label-dim">雷达发现:</span>
                   <span :class="['digital-font', selectedEntity.is_detected_by_red ? 'detected-red' : 'hidden-green']">
@@ -219,18 +223,24 @@
 
               <!-- Weapon Detail Table -->
               <div v-if="selectedType === 'WEAPON'" class="info-grid">
-                <div><span class="label-dim">杀伤分类:</span> <span class="digital-font">{{ selectedEntity.category
-                }}</span>
+                <div><span class="label-dim">杀伤分类:</span> <span class="digital-font">{{
+                  selectedEntity.category
+                    }}</span>
                 </div>
-                <div><span class="label-dim">毁伤机制:</span> <span class="digital-font">{{ selectedEntity.kill_type
-                }}</span>
+                <div><span class="label-dim">毁伤机制:</span> <span class="digital-font">{{
+                  selectedEntity.kill_type
+                    }}</span>
                 </div>
-                <div><span class="label-dim">打击范围:</span> <span class="digital-font">{{ selectedEntity.max_range === -1
-                  ? '全球'
-                  : selectedEntity.max_range + ' km' }}</span></div>
-                <div><span class="label-dim">库存弹药:</span> <span class="digital-font">{{ selectedEntity.inventory === -1
-                  ?
-                  '无限次' : selectedEntity.inventory }}</span></div>
+                <div><span class="label-dim">打击范围:</span> <span class="digital-font">{{
+                  selectedEntity.max_range ===
+                    -1
+                    ? '全球'
+                    : selectedEntity.max_range + ' km' }}</span></div>
+                <div><span class="label-dim">库存弹药:</span> <span class="digital-font">{{
+                  selectedEntity.inventory ===
+                    -1
+                    ?
+                    '无限次' : selectedEntity.inventory }}</span></div>
                 <div><span class="label-dim">单次耗费:</span> <span class="digital-font value-green">${{
                   formatNumber(selectedEntity.action_cost) }}</span></div>
                 <div><span class="label-dim">升级红线:</span> <span class="digital-font value-red">{{
@@ -255,12 +265,12 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, onBeforeUnmount, watch } from 'vue';
 import * as echarts from 'echarts';
-import { sqliteClient } from './db/sqlite-client';
-import { seedMockData } from './db/seeder';
-import Battlefield3D from './components/Battlefield3D.vue';
-import WeaponAssignmentTable from './components/WeaponAssignmentTable.vue';
-import AfterActionReview from './components/AfterActionReview.vue';
-import SqlSandboxDialog from './components/SqlSandboxDialog.vue';
+import { sqliteClient } from '@/db/sqlite-client';
+import { seedMockData } from '@/db/seeder';
+import Battlefield3D from '@/components/electronic/Battlefield3D.vue';
+import WeaponAssignmentTable from '@/components/electronic/WeaponAssignmentTable.vue';
+import AfterActionReview from '@/components/electronic/AfterActionReview.vue';
+import SqlSandboxDialog from '@/components/electronic/SqlSandboxDialog.vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
 // App state variables
@@ -604,7 +614,8 @@ const onTimeStepChange = async (val: any) => {
 
   if (isScenarioLoaded.value) {
     try {
-      const res = await sqliteClient.allocateWeapons(conflictIntensity.value, simTime.value, 'scen-001');
+      const SCENARIO_END_TIME = 1781683200 + 50 * 60; // 与 seeder.ts 中 end_time 保持一致
+      const res = await sqliteClient.allocateWeapons(conflictIntensity.value, simTime.value, 'scen-001', SCENARIO_END_TIME);
       if (res && res.engagements_created > 0) {
         addLog(`进行交战解算：成功匹配 ${res.engagements_created} 次火力压制`, 'warning');
       }
@@ -733,7 +744,7 @@ watch(currentView, () => {
 </script>
 
 <style lang="scss">
-@import "./styles/theme.scss";
+@import "@/styles/theme.scss";
 
 .app-container {
   height: 100vh;
@@ -1010,6 +1021,7 @@ watch(currentView, () => {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         column-gap: 16px;
         row-gap: 6px;
+        justify-items: start;
 
         .grid-col-full {
           grid-column: span 2 / span 2;

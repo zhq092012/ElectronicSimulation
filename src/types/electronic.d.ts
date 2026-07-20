@@ -18,41 +18,64 @@ export type BattlefieldLayer = 0 | 1 | 2;
 
 /**
  * 物理形态分类
+ * 'SATELLITE':'卫星'
+ * 'STATION':'地面站'
+ * 'DRONE':'无人机'
+ * 'COMMAND_CENTER':'指挥中心'
  */
 export type AssetClass = 'SATELLITE' | 'STATION' | 'DRONE' | 'COMMAND_CENTER';
 
 /**
  * 核心功能分类
+ * 'RECON':'侦察卫星' 
+ * 'COMM':'通信卫星' 
+ * 'RELAY':'中继卫星' 
+ * 'OTHER':'其他' 
  */
 export type FuncType = 'RECON' | 'COMM' | 'RELAY' | 'OTHER';
 
 /**
  * 所有权用途分类
+ * 'MILITARY':'军事'
+ * 'CIVIL_COMMERCIAL':'民用商业'
  */
 export type UsageType = 'MILITARY' | 'CIVIL_COMMERCIAL';
 
 /**
  * 跨域杀伤机理分类
+ * 'EW':'电子战'
+ * 'CYBER':'网络战'
+ * 'KINETIC':'物理战'
+ * 'DEW':'定向能武器'
  */
 export type WeaponCategory = 'EW' | 'CYBER' | 'KINETIC' | 'DEW';
 
 /**
  * 毁伤性质分类
+ * 'SOFT':'软杀伤'
+ * 'HARD':'硬杀伤' 
  */
 export type KillType = 'SOFT' | 'HARD';
 
 /**
  * 链路及通讯窗口实时连线状态
+ * 'PENDING':'未建立'
+ * 'TRANSMITTING':'通信中'
+ * 'JAMMED':'被干扰'
+ * 'DESTROYED':'被摧毁'
  */
 export type LinkStatus = 'PENDING' | 'TRANSMITTING' | 'JAMMED' | 'DESTROYED';
 
 /**
  * 推演方案预设冲突严重烈度等级
+ * 'LOW':'低烈度'
+ * 'MEDIUM':'中烈度'
+ * 'HIGH':'高烈度'
  */
 export type IntensityLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
 /**
- * 1. scenarios (战役场景配置与全局约束表)
+ * 战役场景配置与全局约束表
  */
 export interface Scenario {
   id: string;                    // 场景唯一 UUID
