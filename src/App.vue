@@ -7,10 +7,18 @@
 
         <!-- View Switcher Tabs -->
         <nav class="nav-tabs">
-          <button class="tab-btn" :class="{ active: currentView === 'SANDBOX' }" @click="currentView = 'SANDBOX'">
+          <button
+            class="tab-btn"
+            :class="{ active: currentView === 'SANDBOX' }"
+            @click="currentView = 'SANDBOX'"
+          >
             🖥️ 推演主沙盘
           </button>
-          <button class="tab-btn" :class="{ active: currentView === 'AAR' }" @click="currentView = 'AAR'">
+          <button
+            class="tab-btn"
+            :class="{ active: currentView === 'AAR' }"
+            @click="currentView = 'AAR'"
+          >
             📊 战后效能复盘
           </button>
         </nav>
@@ -20,18 +28,29 @@
       <div class="header-right">
         <div class="header-right-item">
           <span class="label-text">推演时钟:</span>
-          <span class="digital-font time-value glow-text-cyan">{{ formatTime(simTime) }}</span>
+          <span class="digital-font time-value glow-text-cyan">{{
+            formatTime(simTime)
+          }}</span>
         </div>
         <div class="header-right-item">
           <span class="label-text">红方预算消耗:</span>
-          <span class="digital-font budget-value glow-text-red">${{ formatNumber(budgetSpent) }} / ${{
-            formatNumber(maxBudget) }}</span>
+          <span class="digital-font budget-value glow-text-red"
+            >${{ formatNumber(budgetSpent) }} / ${{
+              formatNumber(maxBudget)
+            }}</span
+          >
         </div>
         <div class="header-right-item">
           <span class="label-text">数据库状态:</span>
           <span class="db-status-container">
-            <span :class="['status-dot', isDbInitialized ? 'status-green' : 'status-red']"></span>
-            <span class="status-text digital-font">{{ isDbInitialized ? 'SQLite-Wasm (OPFS)' : '连接中...'
+            <span
+              :class="[
+                'status-dot',
+                isDbInitialized ? 'status-green' : 'status-red',
+              ]"
+            ></span>
+            <span class="status-text digital-font">{{
+              isDbInitialized ? "SQLite-Wasm (OPFS)" : "连接中..."
             }}</span>
           </span>
         </div>
@@ -43,7 +62,6 @@
 
     <!-- Main Workspace Grid -->
     <div v-if="currentView === 'SANDBOX'" class="sandbox-workspace">
-
       <!-- Left Panel: Control Panel (25%) -->
       <section class="left-sidebar">
         <!-- Controls Panel -->
@@ -53,29 +71,52 @@
           </div>
           <el-form label-position="left" label-width="90px" class="config-form">
             <el-form-item label="交战烈度:" class="form-item-intensity">
-              <el-select v-model="conflictIntensity" size="small" class="form-input-full">
+              <el-select
+                v-model="conflictIntensity"
+                size="small"
+                class="form-input-full"
+              >
                 <el-option label="低烈度 (软杀伤)" value="LOW" />
                 <el-option label="中烈度 (软/定向能)" value="MEDIUM" />
                 <el-option label="高烈度 (动能全开)" value="HIGH" />
               </el-select>
             </el-form-item>
             <el-form-item label="压制时长:" class="form-item-suppression">
-              <el-input-number v-model="suppressionTime" size="small" :min="10" :max="120" class="form-input-full" />
+              <el-input-number
+                v-model="suppressionTime"
+                size="small"
+                :min="10"
+                :max="120"
+                class="form-input-full"
+              />
             </el-form-item>
             <el-form-item label="代价上限:" class="form-item-budget">
-              <el-input v-model="maxBudget" size="small" class="form-input-full" placeholder="输入预算">
+              <el-input
+                v-model="maxBudget"
+                size="small"
+                class="form-input-full"
+                placeholder="输入预算"
+              >
                 <template #prefix>$</template>
               </el-input>
             </el-form-item>
             <el-form-item label="政治红线:" class="form-item-redline">
-              <el-select v-model="politicalRedline" size="small" class="form-input-full">
+              <el-select
+                v-model="politicalRedline"
+                size="small"
+                class="form-input-full"
+              >
                 <el-option label="严格/灰色地带 (禁打民用)" value="STRICT" />
                 <el-option label="局部冲突 (特定区域)" value="LOCAL" />
                 <el-option label="全面战争 (无限制)" value="TOTAL" />
               </el-select>
             </el-form-item>
             <el-form-item label="推演速率:" class="form-item-speed">
-              <el-select v-model="playSpeedMs" size="small" class="form-input-full">
+              <el-select
+                v-model="playSpeedMs"
+                size="small"
+                class="form-input-full"
+              >
                 <el-option label="快速 (1.0秒/步)" :value="1000" />
                 <el-option label="中速 (2.0秒/步)" :value="2000" />
                 <el-option label="慢速 (5.0秒/步)" :value="5000" />
@@ -83,22 +124,42 @@
             </el-form-item>
 
             <div class="action-btn-row">
-              <el-button type="primary" size="small" class="flex-btn" @click="loadMockScenario">
+              <el-button
+                type="primary"
+                size="small"
+                class="flex-btn"
+                @click="loadMockScenario"
+              >
                 ⚡ 初始化数据
               </el-button>
-              <el-button type="success" size="small" class="flex-btn" :disabled="!isScenarioLoaded"
-                @click="runOrbitCalculation">
+              <el-button
+                type="success"
+                size="small"
+                class="flex-btn"
+                :disabled="!isScenarioLoaded"
+                @click="runOrbitCalculation"
+              >
                 🛰️ 轨道视算
               </el-button>
             </div>
 
-            <el-button :type="isPlaying ? 'warning' : 'danger'" size="small" class="submit-btn font-bold-btn"
-              :disabled="!isScenarioLoaded" @click="togglePlay">
-              {{ isPlaying ? '⏸ 暂停自动推演' : '▶ 开始交战推演' }}
+            <el-button
+              :type="isPlaying ? 'warning' : 'danger'"
+              size="small"
+              class="submit-btn font-bold-btn"
+              :disabled="!isScenarioLoaded"
+              @click="togglePlay"
+            >
+              {{ isPlaying ? "⏸ 暂停自动推演" : "▶ 开始交战推演" }}
             </el-button>
 
-            <el-button type="success" size="small" class="submit-btn font-bold-btn" :disabled="simMinutes < 50"
-              @click="savePlan">
+            <el-button
+              type="success"
+              size="small"
+              class="submit-btn font-bold-btn"
+              :disabled="simMinutes < 50"
+              @click="savePlan"
+            >
               💾 保存方案用于复盘
             </el-button>
           </el-form>
@@ -107,10 +168,18 @@
           <div class="time-slider-container">
             <div class="slider-header">
               <span class="label-text">推演步长演进:</span>
-              <span class="time-progress digital-font">{{ simMinutes }} / 50 min</span>
+              <span class="time-progress digital-font"
+                >{{ simMinutes }} / 50 min</span
+              >
             </div>
-            <el-slider v-model="simMinutes" :min="0" :max="50" :step="1" :disabled="!isScenarioLoaded"
-              @change="onTimeStepChange" />
+            <el-slider
+              v-model="simMinutes"
+              :min="0"
+              :max="50"
+              :step="1"
+              :disabled="!isScenarioLoaded"
+              @change="onTimeStepChange"
+            />
           </div>
         </div>
 
@@ -121,9 +190,19 @@
           </div>
           <div ref="timelineContainer" class="timeline-log-container">
             <el-timeline v-if="filteredLogs.length > 0">
-              <el-timeline-item v-for="(log, index) in filteredLogs" :key="index"
-                :type="log.level === 'error' ? 'danger' : log.level === 'warning' ? 'warning' : 'primary'" size="normal"
-                :timestamp="log.time">
+              <el-timeline-item
+                v-for="(log, index) in filteredLogs"
+                :key="index"
+                :type="
+                  log.level === 'error'
+                    ? 'danger'
+                    : log.level === 'warning'
+                      ? 'warning'
+                      : 'primary'
+                "
+                size="normal"
+                :timestamp="log.time"
+              >
                 <div class="log-message">{{ log.message }}</div>
               </el-timeline-item>
             </el-timeline>
@@ -144,7 +223,12 @@
 
         <!-- Network Topology Canvas (3D Force Graph) -->
         <div class="canvas-container">
-          <Battlefield3D v-if="isScenarioLoaded" :nodes="assets" :links="links" @select-node="selectEntity" />
+          <Battlefield3D
+            v-if="isScenarioLoaded"
+            :nodes="assets"
+            :links="links"
+            @select-node="selectEntity"
+          />
           <div v-else class="empty-canvas-message">
             请在左侧点击“初始化数据”载入推演场景
           </div>
@@ -153,7 +237,6 @@
 
       <!-- Right Panel: BDA Dashboard (25%) -->
       <section class="right-sidebar">
-
         <!-- Radar Chart -->
         <div class="tech-panel radar-card">
           <div class="panel-header">
@@ -176,83 +259,147 @@
           <div class="inspector-details">
             <div v-if="selectedEntity">
               <div class="inspector-header">
-                <span class="entity-name">{{ selectedEntity.name || selectedEntity.id }}</span>
+                <span class="entity-name">{{
+                  selectedEntity.name || selectedEntity.id
+                }}</span>
                 <span
-                  :class="['side-tag', (selectedType === 'WEAPON' || selectedEntity.side === 'RED') ? 'red-side' : 'blue-side']">
-                  {{ (selectedType === 'WEAPON' || selectedEntity.side === 'RED') ? (selectedType ===
-                    'WEAPON' ?
-                    '红方武器'
-                    :
-                    '红方资产') : '蓝方资产' }}
+                  :class="[
+                    'side-tag',
+                    selectedType === 'WEAPON' || selectedEntity.side === 'RED'
+                      ? 'red-side'
+                      : 'blue-side',
+                  ]"
+                >
+                  {{
+                    selectedType === "WEAPON" || selectedEntity.side === "RED"
+                      ? selectedType === "WEAPON"
+                        ? "红方武器"
+                        : "红方资产"
+                      : "蓝方资产"
+                  }}
                 </span>
               </div>
 
               <!-- Asset Detail Table -->
               <div v-if="selectedType === 'ASSET'" class="info-grid">
-                <div><span class="label-dim">实体类型:</span> <span class="digital-font">{{
-                  selectedEntity.asset_class
-                    }}</span>
+                <div>
+                  <span class="label-dim">实体类型:</span>
+                  <span class="digital-font">{{
+                    selectedEntity.asset_class
+                  }}</span>
                 </div>
-                <div><span class="label-dim">核心功能:</span> <span class="digital-font">{{
-                  selectedEntity.func_type
-                    }}</span>
+                <div>
+                  <span class="label-dim">核心功能:</span>
+                  <span class="digital-font">{{
+                    selectedEntity.func_type
+                  }}</span>
                 </div>
-                <div><span class="label-dim">所有权:</span> <span class="digital-font">{{
-                  selectedEntity.usage_type
-                    }}</span>
+                <div>
+                  <span class="label-dim">所有权:</span>
+                  <span class="digital-font">{{
+                    selectedEntity.usage_type
+                  }}</span>
                 </div>
-                <div><span class="label-dim">空间分层:</span> <span class="digital-font">{{
-                  getLayerLabel(selectedEntity.layer)
-                    }}</span></div>
-                <div><span class="label-dim">抗干扰级:</span> <span class="digital-font value-yellow">{{
-                  selectedEntity.anti_jam_level }}</span></div>
-                <div><span class="label-dim">目标价值:</span> <span class="digital-font value-cyan">{{
-                  selectedEntity.base_priority }}</span></div>
-                <div class="grid-col-full"><span class="label-dim">三维坐标:</span> <span class="digital-font">L:{{
-                  selectedEntity.lat ? selectedEntity.lat.toFixed(2) : '计算中' }},{{
-                      selectedEntity.lng ?
-                        selectedEntity.lng.toFixed(2) : '计算中' }} A:{{ selectedEntity.alt || 0
-                    }}km</span></div>
+                <div>
+                  <span class="label-dim">空间分层:</span>
+                  <span class="digital-font">{{
+                    getLayerLabel(selectedEntity.layer)
+                  }}</span>
+                </div>
+                <div>
+                  <span class="label-dim">抗干扰级:</span>
+                  <span class="digital-font value-yellow">{{
+                    selectedEntity.anti_jam_level
+                  }}</span>
+                </div>
+                <div>
+                  <span class="label-dim">目标价值:</span>
+                  <span class="digital-font value-cyan">{{
+                    selectedEntity.base_priority
+                  }}</span>
+                </div>
+                <div class="grid-col-full">
+                  <span class="label-dim">三维坐标:</span>
+                  <span class="digital-font"
+                    >L:{{
+                      selectedEntity.lat
+                        ? selectedEntity.lat.toFixed(2)
+                        : "计算中"
+                    }},{{
+                      selectedEntity.lng
+                        ? selectedEntity.lng.toFixed(2)
+                        : "计算中"
+                    }}
+                    A:{{ selectedEntity.alt || 0 }}km</span
+                  >
+                </div>
                 <div class="grid-col-full">
                   <span class="label-dim">雷达发现:</span>
-                  <span :class="['digital-font', selectedEntity.is_detected_by_red ? 'detected-red' : 'hidden-green']">
-                    {{ selectedEntity.is_detected_by_red ? '已被锁定' : '隐蔽中' }}
+                  <span
+                    :class="[
+                      'digital-font',
+                      selectedEntity.is_detected_by_red
+                        ? 'detected-red'
+                        : 'hidden-green',
+                    ]"
+                  >
+                    {{
+                      selectedEntity.is_detected_by_red ? "已被锁定" : "隐蔽中"
+                    }}
                   </span>
                 </div>
               </div>
 
               <!-- Weapon Detail Table -->
               <div v-if="selectedType === 'WEAPON'" class="info-grid">
-                <div><span class="label-dim">杀伤分类:</span> <span class="digital-font">{{
-                  selectedEntity.category
-                    }}</span>
+                <div>
+                  <span class="label-dim">杀伤分类:</span>
+                  <span class="digital-font">{{
+                    selectedEntity.category
+                  }}</span>
                 </div>
-                <div><span class="label-dim">毁伤机制:</span> <span class="digital-font">{{
-                  selectedEntity.kill_type
-                    }}</span>
+                <div>
+                  <span class="label-dim">毁伤机制:</span>
+                  <span class="digital-font">{{
+                    selectedEntity.kill_type
+                  }}</span>
                 </div>
-                <div><span class="label-dim">打击范围:</span> <span class="digital-font">{{
-                  selectedEntity.max_range ===
-                    -1
-                    ? '全球'
-                    : selectedEntity.max_range + ' km' }}</span></div>
-                <div><span class="label-dim">库存弹药:</span> <span class="digital-font">{{
-                  selectedEntity.inventory ===
-                    -1
-                    ?
-                    '无限次' : selectedEntity.inventory }}</span></div>
-                <div><span class="label-dim">单次耗费:</span> <span class="digital-font value-green">${{
-                  formatNumber(selectedEntity.action_cost) }}</span></div>
-                <div><span class="label-dim">升级红线:</span> <span class="digital-font value-red">{{
-                  selectedEntity.political_risk }}</span></div>
+                <div>
+                  <span class="label-dim">打击范围:</span>
+                  <span class="digital-font">{{
+                    selectedEntity.max_range === -1
+                      ? "全球"
+                      : selectedEntity.max_range + " km"
+                  }}</span>
+                </div>
+                <div>
+                  <span class="label-dim">库存弹药:</span>
+                  <span class="digital-font">{{
+                    selectedEntity.inventory === -1
+                      ? "无限次"
+                      : selectedEntity.inventory
+                  }}</span>
+                </div>
+                <div>
+                  <span class="label-dim">单次耗费:</span>
+                  <span class="digital-font value-green"
+                    >${{ formatNumber(selectedEntity.action_cost) }}</span
+                  >
+                </div>
+                <div>
+                  <span class="label-dim">升级红线:</span>
+                  <span class="digital-font value-red">{{
+                    selectedEntity.political_risk
+                  }}</span>
+                </div>
               </div>
             </div>
-            <div v-else class="empty-inspector">点击 3D 拓扑节点，在此查看探针参数</div>
+            <div v-else class="empty-inspector">
+              点击 3D 拓扑节点，在此查看探针参数
+            </div>
           </div>
         </div>
-
       </section>
-
     </div>
 
     <!-- AAR View -->
@@ -263,95 +410,114 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, onBeforeUnmount, watch } from 'vue';
-import * as echarts from 'echarts';
-import { sqliteClient } from '@/db/sqlite-client';
-import { seedMockData } from '@/db/seeder';
-import Battlefield3D from '@/components/electronic/Battlefield3D.vue';
-import WeaponAssignmentTable from '@/components/electronic/WeaponAssignmentTable.vue';
-import AfterActionReview from '@/components/electronic/AfterActionReview.vue';
-import SqlSandboxDialog from '@/components/electronic/SqlSandboxDialog.vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ref, onMounted, nextTick, onBeforeUnmount, watch } from "vue";
+import * as echarts from "echarts";
+import { sqliteClient } from "@/db/sqlite-client";
+import { seedMockData } from "@/db/seeder";
+import Battlefield3D from "@/components/electronic/Battlefield3D.vue";
+import WeaponAssignmentTable from "@/components/electronic/WeaponAssignmentTable.vue";
+import AfterActionReview from "@/components/electronic/AfterActionReview.vue";
+import SqlSandboxDialog from "@/components/electronic/SqlSandboxDialog.vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 
-// App state variables
+// 用于标记数据库是否成功初始化
 const isDbInitialized = ref(false);
+// 用于标记场景是否已加载
 const isScenarioLoaded = ref(false);
-const currentView = ref<'SANDBOX' | 'AAR'>('SANDBOX');
+// 用于标记当前视图是沙箱还是战后复盘
+const currentView = ref<"SANDBOX" | "AAR">("SANDBOX");
+// 用于标记沙箱是否已打开
 const sqlSandboxRef = ref<any>(null);
 
 // Forms
-const conflictIntensity = ref<'LOW' | 'MEDIUM' | 'HIGH'>('LOW');
-const suppressionTime = ref(50);
-const maxBudget = ref(600000);
-const politicalRedline = ref<'STRICT' | 'LOCAL' | 'TOTAL'>('STRICT');
-const playSpeedMs = ref(1000);
+const conflictIntensity = ref<"LOW" | "MEDIUM" | "HIGH">("LOW"); //推演烈度
+const suppressionTime = ref(50); //软杀伤持续时间（秒）
+const maxBudget = ref(600000); //最大预算
+const politicalRedline = ref<"STRICT" | "LOCAL" | "TOTAL">("STRICT"); //政治红线
+const playSpeedMs = ref(1000); //播放速度
 
 // Simulator state
-const simTime = ref(1781683200); // Unix timestamp
-const budgetSpent = ref(0);
-const totalDelay = ref(30); // in seconds
-const simMinutes = ref(0);
+const simTime = ref(1781683200); // 当前时间
+const budgetSpent = ref(0); //已消耗预算
+const totalDelay = ref(30); // 总延迟
+const simMinutes = ref(0); //推演分钟数
 
 // Lists
-const assets = ref<any[]>([]);
-const links = ref<any[]>([]);
+const assets = ref<any[]>([]); //资产列表
+const links = ref<any[]>([]); //链路列表
 
 // Logs & Timeline
-const logs = ref<any[]>([]);
-const filteredLogs = ref<any[]>([]);
-const timelineContainer = ref<HTMLElement | null>(null);
+const logs = ref<any[]>([]); //日志
+const filteredLogs = ref<any[]>([]); //过滤日志
+const timelineContainer = ref<HTMLElement | null>(null); //时间线容器
 
 // Selected element detail
-const selectedEntity = ref<any>(null);
-const selectedType = ref<'ASSET' | 'WEAPON' | null>(null);
+const selectedEntity = ref<any>(null); //当前选中实体
+const selectedType = ref<"ASSET" | "WEAPON" | null>(null); //当前选中实体类型
 
 // Time Engine Event Loop State
-const isPlaying = ref(false);
-const playIntervalId = ref<any>(null);
+const isPlaying = ref(false); // 是否正在播放
+const playIntervalId = ref<any>(null); // 播放定时器
 
 // Small Radar Chart
-const smallRadarChartRef = ref<HTMLDivElement | null>(null);
+const smallRadarChartRef = ref<HTMLDivElement | null>(null); //小雷达图容器
 
 onMounted(async () => {
-  addLog('CEMA 推演引擎启动...', 'info');
+  addLog("CEMA 推演引擎启动...", "info");
   try {
     await sqliteClient.init();
     isDbInitialized.value = true;
-    addLog('SQLite Wasm (OPFS) 线程初始化成功！', 'success');
+    addLog("SQLite Wasm (OPFS) 线程初始化成功！", "success");
     await refreshData();
   } catch (err: any) {
-    addLog(`数据库加载失败: ${err.message}`, 'error');
+    addLog(`数据库加载失败: ${err.message}`, "error");
   }
 });
 
-// Helper formatted methods
+/**
+ * 格式化时间
+ */
 const formatTime = (ts: number) => {
   const date = new Date(ts * 1000);
-  return date.toISOString().replace('T', ' ').substring(0, 19);
+  return date.toISOString().replace("T", " ").substring(0, 19);
 };
-
+/**
+ * 格式化数字
+ */
 const formatNumber = (num: number | null | undefined) => {
-  if (num === null || num === undefined) return '0';
+  if (num === null || num === undefined) return "0";
   return num.toLocaleString();
 };
 
+/**
+ * 获取层次标签
+ */
 const getLayerLabel = (layer: number) => {
-  if (layer === 0) return '地基层 (Ground)';
-  if (layer === 1) return '空基层 (Air)';
-  if (layer === 2) return '天基层 (Space)';
-  return '未知';
+  if (layer === 0) return "地基层 (Ground)";
+  if (layer === 1) return "空基层 (Air)";
+  if (layer === 2) return "天基层 (Space)";
+  return "未知";
 };
 
-const addLog = (message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+/**
+ * 添加日志
+ */
+const addLog = (
+  message: string,
+  level: "info" | "success" | "warning" | "error" = "info",
+) => {
   const time = `T+${simMinutes.value}m`;
   const logItem = { time, message, level, minute: simMinutes.value };
   logs.value.push(logItem);
   filterLogs();
 };
 
+/**
+ * 过滤日志
+ */
 const filterLogs = () => {
-  // Show logs up to current simulated minute
-  filteredLogs.value = logs.value.filter(l => l.minute <= simMinutes.value);
+  // 显示当前推演分钟数的日志
+  filteredLogs.value = logs.value.filter((l) => l.minute <= simMinutes.value);
   nextTick(() => {
     if (timelineContainer.value) {
       timelineContainer.value.scrollTop = timelineContainer.value.scrollHeight;
@@ -359,41 +525,58 @@ const filterLogs = () => {
   });
 };
 
+/**
+ * 监听推演分钟数变化，过滤日志
+ */
 watch(simMinutes, filterLogs);
-
+/**
+ * 打开 SQL 沙盒对话框
+ */
 const openSqlSandbox = () => {
   if (sqlSandboxRef.value) {
     sqlSandboxRef.value.openDialog();
   }
 };
-
+/**
+ * 刷新场景数据
+ */
 const refreshData = async () => {
   try {
-    const scen = await sqliteClient.query<any>("SELECT * FROM scenarios WHERE id = 'scen-001'");
+    const scen = await sqliteClient.query<any>(
+      "SELECT * FROM scenarios WHERE id = 'scen-001'",
+    );
     if (scen.length > 0) {
       isScenarioLoaded.value = true;
       simTime.value = scen[0].start_time + simMinutes.value * 60;
 
-      // 1. Calculate and update satellite positions for this time tick
+      // 1. 计算并更新卫星位置
       await sqliteClient.updateSatellitePositions(simTime.value);
 
-      // 2. Fetch assets and weapons to merge as node objects
+      // 2. 获取资产和武器以合并为节点对象
       const assetsList = await sqliteClient.query<any>("SELECT * FROM assets");
-      const weaponsList = await sqliteClient.query<any>("SELECT * FROM weapons");
+      const weaponsList = await sqliteClient.query<any>(
+        "SELECT * FROM weapons",
+      );
 
-
-      const mappedAssets = assetsList.map(a => {
+      const mappedAssets = assetsList.map((a) => {
         let x = undefined;
         let y = undefined;
-        if (a.lat !== null && a.lat !== undefined && a.lat !== 0 &&
-          a.lng !== null && a.lng !== undefined && a.lng !== 0) {
+        if (
+          a.lat !== null &&
+          a.lat !== undefined &&
+          a.lat !== 0 &&
+          a.lng !== null &&
+          a.lng !== undefined &&
+          a.lng !== 0
+        ) {
           const CLAMP_BOUND = 200;
           if (a.layer === 2) {
-            // Global mapping for satellites: [-180, 180] -> [-200, 200] and [-90, 90] -> [-200, 200]
+            // 全球映射：[-180, 180] -> [-200, 200] 且 [-90, 90] -> [-200, 200]
             x = (a.lng / 180.0) * CLAMP_BOUND;
             y = (a.lat / 90.0) * CLAMP_BOUND;
           } else {
-            // Local mapping for stations/drones around Taiwan
+            // 战场区域站/无人机本地映射
+            // 注：2.0 是地理业务参数：代表该地图关注区域的地理跨度。160 是UI 渲染参数：代表 Three.js 场景中网格（Grid）的大小
             x = ((a.lng - 121.0) / 2.0) * 160;
             y = ((a.lat - 24.0) / 2.0) * 160;
           }
@@ -405,11 +588,11 @@ const refreshData = async () => {
           ...a,
           fx: x,
           fy: y,
-          fz: a.layer * 150 - 150
+          fz: a.layer * 150 - 150,
         };
       });
 
-      const weaponNodes = weaponsList.map(w => {
+      const weaponNodes = weaponsList.map((w) => {
         let lat = w.base_lat;
         let lng = w.base_lng;
         // If it's a cyber weapon with 0 coordinates, give it a default red side position
@@ -420,8 +603,14 @@ const refreshData = async () => {
 
         let x = undefined;
         let y = undefined;
-        if (lat !== null && lat !== undefined && lat !== 0 &&
-          lng !== null && lng !== undefined && lng !== 0) {
+        if (
+          lat !== null &&
+          lat !== undefined &&
+          lat !== 0 &&
+          lng !== null &&
+          lng !== undefined &&
+          lng !== 0
+        ) {
           x = ((lng - 121.0) / 2.0) * 160;
           y = ((lat - 24.0) / 2.0) * 160;
 
@@ -432,9 +621,9 @@ const refreshData = async () => {
         return {
           id: w.id,
           name: w.name,
-          side: 'RED',
+          side: "RED",
           layer: 0, // Ground
-          asset_class: 'WEAPON',
+          asset_class: "WEAPON",
           category: w.category,
           kill_type: w.kill_type,
           action_cost: w.action_cost,
@@ -445,19 +634,22 @@ const refreshData = async () => {
           lng: lng,
           fx: x,
           fy: y,
-          fz: -150
+          fz: -150,
         };
       });
 
       assets.value = [...mappedAssets, ...weaponNodes];
 
       // 3. Fetch active communication windows at this tick
-      const linksList = await sqliteClient.query<any>(`
+      const linksList = await sqliteClient.query<any>(
+        `
         SELECT * FROM communication_windows 
         WHERE ? BETWEEN window_start AND window_end
-      `, [simTime.value]);
+      `,
+        [simTime.value],
+      );
 
-      const mappedLinks = linksList.map(l => ({
+      const mappedLinks = linksList.map((l) => ({
         id: l.id,
         scenario_id: l.scenario_id,
         source: l.source_id,
@@ -465,11 +657,12 @@ const refreshData = async () => {
         window_start: l.window_start,
         window_end: l.window_end,
         routing_converge_delay: l.routing_converge_delay,
-        link_status: l.link_status
+        link_status: l.link_status,
       }));
 
       // 4. Fetch active engagements at this tick to draw links from weapons to targets
-      const engagementLinks = await sqliteClient.query<any>(`
+      const engagementLinks = await sqliteClient.query<any>(
+        `
         SELECT e.weapon_id as source, a.id as target, 
                'ENGAGEMENT' as link_status
         FROM engagements e
@@ -477,84 +670,118 @@ const refreshData = async () => {
         JOIN assets a ON cw.target_id = a.id OR cw.source_id = a.id
         WHERE e.action_time = ?
         GROUP BY e.id
-      `, [simTime.value]);
+      `,
+        [simTime.value],
+      );
 
       links.value = [...mappedLinks, ...engagementLinks];
 
-      const plans = await sqliteClient.query<any>("SELECT * FROM tactical_plans WHERE id = 'plan-001'");
+      const plans = await sqliteClient.query<any>(
+        "SELECT * FROM tactical_plans WHERE id = 'plan-001'",
+      );
       if (plans.length > 0) {
         budgetSpent.value = plans[0].total_cost;
         totalDelay.value = plans[0].total_delay_achieved;
       }
-
+      // 更新小雷达
       updateSmallRadar();
     } else {
       isScenarioLoaded.value = false;
     }
   } catch (error) {
-    console.error('Error refreshing data:', error);
+    console.error("Error refreshing data:", error);
   }
 };
 
 // Actions
+/**
+ * 加载模拟数据
+ */
 const loadMockScenario = async () => {
-  addLog('初始化数据...', 'info');
+  addLog("初始化数据...", "info");
   try {
     await seedMockData(sqliteClient);
-    addLog('导入基础场景数据完成！正在进行初始轨道视算...', 'info');
-    await sqliteClient.calculateWindows('scen-001');
-    addLog('初始轨道视算完成！星地链路已生成。', 'success');
+    addLog("导入基础场景数据完成！正在进行初始轨道视算...", "info");
+    await sqliteClient.calculateWindows("scen-001");
+    addLog("初始轨道视算完成！星地链路已生成。", "success");
     simMinutes.value = 0;
     logs.value = [];
     await refreshData();
   } catch (error: any) {
-    addLog(`场景初始化出错: ${error.message}`, 'error');
+    addLog(`场景初始化出错: ${error.message}`, "error");
   }
 };
 
+/**
+ * 运行轨道视算
+ */
 const runOrbitCalculation = async () => {
-  addLog('正在启动 satellite.js 轨道视算...', 'info');
+  addLog("正在启动 satellite.js 轨道视算...", "info");
   try {
-    await sqliteClient.calculateWindows('scen-001');
-    addLog('轨道计算视算完成！星地拓扑链路已生成。', 'success');
+    await sqliteClient.calculateWindows("scen-001");
+    addLog("轨道计算视算完成！星地拓扑链路已生成。", "success");
     await refreshData();
   } catch (error: any) {
-    addLog(`轨道视算失败: ${error.message}`, 'error');
+    addLog(`轨道视算失败: ${error.message}`, "error");
   }
 };
 
+/**
+ * 保存对抗方案
+ */
 const savePlan = async () => {
   if (!isScenarioLoaded.value) {
-    ElMessage.warning('请先加载场景并进行交战推演！');
+    ElMessage.warning("请先加载场景并进行交战推演！");
     return;
   }
   try {
-    const { value } = await ElMessageBox.prompt('请输入保存方案的名称:', '保存对抗方案', {
-      confirmButtonText: '保存',
-      cancelButtonText: '取消',
-      inputPattern: /\S+/,
-      inputErrorMessage: '方案名称不能为空'
-    });
+    const { value } = await ElMessageBox.prompt(
+      "请输入保存方案的名称:",
+      "保存对抗方案",
+      {
+        confirmButtonText: "保存",
+        cancelButtonText: "取消",
+        inputPattern: /\S+/,
+        inputErrorMessage: "方案名称不能为空",
+      },
+    );
 
     if (!value) return;
 
     // 1. 获取物理摧毁节点数
-    const destroyedRes = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM assets WHERE anti_jam_level = 0 AND side = 'BLUE'");
+    const destroyedRes = await sqliteClient.query<any>(
+      "SELECT COUNT(*) as cnt FROM assets WHERE anti_jam_level = 0 AND side = 'BLUE'",
+    );
     const nodes_destroyed = destroyedRes[0]?.cnt || 0;
 
     // 2. 获取最终链路阻断率
-    const totalLinks = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM communication_windows");
-    const blockedLinks = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM communication_windows WHERE link_status IN ('JAMMED', 'DESTROYED')");
+    const totalLinks = await sqliteClient.query<any>(
+      "SELECT COUNT(*) as cnt FROM communication_windows",
+    );
+    const blockedLinks = await sqliteClient.query<any>(
+      "SELECT COUNT(*) as cnt FROM communication_windows WHERE link_status IN ('JAMMED', 'DESTROYED')",
+    );
     const tot = totalLinks[0]?.cnt || 0;
     const blk = blockedLinks[0]?.cnt || 0;
     const blockRate = tot > 0 ? Math.round((blk / tot) * 100) : 0;
 
     // 3. 计算最终效能评估得分
     const blockScore = blockRate;
-    const controlScore = Math.max(30, Math.round(100 - (budgetSpent.value / maxBudget.value) * 50));
-    const costEfficiency = Math.min(95, Math.round((totalDelay.value / (budgetSpent.value + 100)) * 6000));
-    const selfInterference = Math.max(20, Math.round(100 - (budgetSpent.value > 50000 ? 40 : 15)));
-    const final_score = Math.round((blockScore + controlScore + costEfficiency + selfInterference) / 4);
+    const controlScore = Math.max(
+      30,
+      Math.round(100 - (budgetSpent.value / maxBudget.value) * 50),
+    );
+    const costEfficiency = Math.min(
+      95,
+      Math.round((totalDelay.value / (budgetSpent.value + 100)) * 6000),
+    );
+    const selfInterference = Math.max(
+      20,
+      Math.round(100 - (budgetSpent.value > 50000 ? 40 : 15)),
+    );
+    const final_score = Math.round(
+      (blockScore + controlScore + costEfficiency + selfInterference) / 4,
+    );
 
     // 4. 计算时序曲线数据 (与 AAR 取样计算一致)
     const timelineCollapseRatios: number[] = [];
@@ -562,70 +789,97 @@ const savePlan = async () => {
     for (let m = 0; m <= 50; m += 2) {
       const t = 1781683200 + m * 60;
 
-      const linksRes = await sqliteClient.query<any>(`
+      const linksRes = await sqliteClient.query<any>(
+        `
         SELECT COUNT(*) as total, 
                SUM(CASE WHEN link_status IN ('JAMMED', 'DESTROYED') THEN 1 ELSE 0 END) as blocked 
         FROM communication_windows 
         WHERE ? BETWEEN window_start AND window_end
-      `, [t]);
+      `,
+        [t],
+      );
       const totalCount = linksRes[0]?.total || 0;
       const blockedCount = linksRes[0]?.blocked || 0;
-      const ratio = totalCount > 0 ? Math.round((blockedCount / totalCount) * 100) : 0;
+      const ratio =
+        totalCount > 0 ? Math.round((blockedCount / totalCount) * 100) : 0;
       timelineCollapseRatios.push(ratio);
 
-      const costRes = await sqliteClient.query<any>(`
+      const costRes = await sqliteClient.query<any>(
+        `
         SELECT SUM(w.action_cost) as total_cost 
         FROM engagements e
         JOIN weapons w ON e.weapon_id = w.id
         WHERE e.action_time <= ?
-      `, [t]);
+      `,
+        [t],
+      );
       const cost = costRes[0]?.total_cost || 0;
       timelineCumulativeCosts.push(cost);
     }
 
     const planId = `plan-${Date.now()}`;
-    await sqliteClient.execute(`
+    await sqliteClient.execute(
+      `
       INSERT INTO tactical_plans (id, scenario_id, name, intensity_level, total_cost, total_delay_achieved, nodes_destroyed, final_score, timeline_collapse_ratios, timeline_cumulative_costs)
       VALUES (?, 'scen-001', ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      planId,
-      value,
-      conflictIntensity.value,
-      budgetSpent.value,
-      totalDelay.value,
-      nodes_destroyed,
-      final_score,
-      JSON.stringify(timelineCollapseRatios),
-      JSON.stringify(timelineCumulativeCosts)
-    ]);
+    `,
+      [
+        planId,
+        value,
+        conflictIntensity.value,
+        budgetSpent.value,
+        totalDelay.value,
+        nodes_destroyed,
+        final_score,
+        JSON.stringify(timelineCollapseRatios),
+        JSON.stringify(timelineCumulativeCosts),
+      ],
+    );
 
-    ElMessage.success(`方案“${value}”已成功保存！请进入战后效能复盘大屏对比查看。`);
+    ElMessage.success(
+      `方案“${value}”已成功保存！请进入战后效能复盘大屏对比查看。`,
+    );
   } catch (err: any) {
-    if (err !== 'cancel') {
+    if (err !== "cancel") {
       console.error(err);
       ElMessage.error(`方案保存失败: ${err.message || err}`);
     }
   }
 };
 
+/**
+ * 时间步改变
+ * @param val 时间步
+ */
 const onTimeStepChange = async (val: any) => {
-  simMinutes.value = val;
-  simTime.value = 1781683200 + val * 60;
+  simMinutes.value = val; // 走了多少步
+  simTime.value = 1781683200 + val * 60; // 当前时间 = 初始时间 + 走了多少步*60
 
   if (isScenarioLoaded.value) {
     try {
       const SCENARIO_END_TIME = 1781683200 + 50 * 60; // 与 seeder.ts 中 end_time 保持一致
-      const res = await sqliteClient.allocateWeapons(conflictIntensity.value, simTime.value, 'scen-001', SCENARIO_END_TIME);
+      const res = await sqliteClient.allocateWeapons(
+        conflictIntensity.value,
+        simTime.value,
+        "scen-001",
+        SCENARIO_END_TIME,
+      );
       if (res && res.engagements_created > 0) {
-        addLog(`进行交战解算：成功匹配 ${res.engagements_created} 次火力压制`, 'warning');
+        addLog(
+          `进行交战解算：成功匹配 ${res.engagements_created} 次火力压制`,
+          "warning",
+        );
       }
       await refreshData();
     } catch (e: any) {
-      addLog(`战术交战计算出错: ${e.message}`, 'error');
+      addLog(`战术交战计算出错: ${e.message}`, "error");
     }
   }
 };
 
+/**
+ * 切换推演状态
+ */
 const togglePlay = () => {
   if (isPlaying.value) {
     stopSimulationLoop();
@@ -633,17 +887,25 @@ const togglePlay = () => {
     startSimulationLoop();
   }
 };
-
+/**
+ * 开始推演循环
+ */
 const startSimulationLoop = () => {
   if (simMinutes.value >= 50) {
     simMinutes.value = 0; // 重头循环
   }
   isPlaying.value = true;
-  addLog(`推演开始 (烈度: ${conflictIntensity.value}, 政治红线: ${politicalRedline.value})`, 'success');
+  addLog(
+    `推演开始 (烈度: ${conflictIntensity.value}, 政治红线: ${politicalRedline.value})`,
+    "success",
+  );
 
   playIntervalId.value = setInterval(async () => {
     if (simMinutes.value >= suppressionTime.value) {
-      addLog(`已达到设定的 ${suppressionTime.value} 分钟压制时长，推演结束。`, 'success');
+      addLog(
+        `已达到设定的 ${suppressionTime.value} 分钟压制时长，推演结束。`,
+        "success",
+      );
       stopSimulationLoop();
       return;
     }
@@ -652,6 +914,9 @@ const startSimulationLoop = () => {
   }, playSpeedMs.value);
 };
 
+/**
+ * 停止推演循环
+ */
 const stopSimulationLoop = () => {
   isPlaying.value = false;
   if (playIntervalId.value) {
@@ -663,84 +928,112 @@ const stopSimulationLoop = () => {
 onBeforeUnmount(() => {
   stopSimulationLoop();
 });
-
-const selectEntity = async (id: string, type: 'ASSET' | 'WEAPON') => {
+/**
+ * 选中实体
+ * @param id 实体ID
+ * @param type 实体类型
+ */
+const selectEntity = async (id: string, type: "ASSET" | "WEAPON") => {
   selectedEntity.value = null; // Clear old entity to avoid asynchronous UI rendering race conditions
   selectedType.value = type;
   try {
-    if (type === 'ASSET') {
-      const rows = await sqliteClient.query<any>(`SELECT * FROM assets WHERE id = ?`, [id]);
+    if (type === "ASSET") {
+      const rows = await sqliteClient.query<any>(
+        `SELECT * FROM assets WHERE id = ?`,
+        [id],
+      );
       if (rows.length > 0) selectedEntity.value = rows[0];
-    } else if (type === 'WEAPON') {
-      const rows = await sqliteClient.query<any>(`SELECT * FROM weapons WHERE id = ?`, [id]);
+    } else if (type === "WEAPON") {
+      const rows = await sqliteClient.query<any>(
+        `SELECT * FROM weapons WHERE id = ?`,
+        [id],
+      );
       if (rows.length > 0) selectedEntity.value = rows[0];
     }
   } catch (error) {
-    console.error('Error selecting entity:', error);
+    console.error("Error selecting entity:", error);
   }
 };
-
+/**
+ * 更新雷达图数据
+ */
 const updateSmallRadar = async () => {
   if (!smallRadarChartRef.value) return;
-  if (currentView.value !== 'SANDBOX') return;
+  if (currentView.value !== "SANDBOX") return;
 
   let chartInstance = echarts.getInstanceByDom(smallRadarChartRef.value);
   if (!chartInstance) {
-    chartInstance = echarts.init(smallRadarChartRef.value, 'dark');
+    chartInstance = echarts.init(smallRadarChartRef.value, "dark");
   }
 
   // Same logic as AAR
-  const totalLinks = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM communication_windows");
-  const blockedLinks = await sqliteClient.query<any>("SELECT COUNT(*) as cnt FROM communication_windows WHERE link_status IN ('JAMMED', 'DESTROYED')");
+  const totalLinks = await sqliteClient.query<any>(
+    "SELECT COUNT(*) as cnt FROM communication_windows",
+  );
+  const blockedLinks = await sqliteClient.query<any>(
+    "SELECT COUNT(*) as cnt FROM communication_windows WHERE link_status IN ('JAMMED', 'DESTROYED')",
+  );
   const tot = totalLinks[0]?.cnt || 0;
   const blk = blockedLinks[0]?.cnt || 0;
   const blockRate = tot > 0 ? Math.round((blk / tot) * 100) : 0;
 
   const blockScore = blockRate;
-  const controlScore = Math.max(30, Math.round(100 - (budgetSpent.value / maxBudget.value) * 50));
-  const costEfficiency = Math.min(95, Math.round((totalDelay.value / (budgetSpent.value + 100)) * 6000));
-  const selfInterference = Math.max(20, Math.round(100 - (budgetSpent.value > 50000 ? 40 : 15)));
+  const controlScore = Math.max(
+    30,
+    Math.round(100 - (budgetSpent.value / maxBudget.value) * 50),
+  );
+  const costEfficiency = Math.min(
+    95,
+    Math.round((totalDelay.value / (budgetSpent.value + 100)) * 6000),
+  );
+  const selfInterference = Math.max(
+    20,
+    Math.round(100 - (budgetSpent.value > 50000 ? 40 : 15)),
+  );
 
   const option = {
-    backgroundColor: 'transparent',
-    color: ['#00e1ff'],
+    backgroundColor: "transparent",
+    color: ["#00e1ff"],
     radar: {
       indicator: [
-        { name: '阻断成功率', max: 100 },
-        { name: '冲突控制', max: 100 },
-        { name: '效费比', max: 100 },
-        { name: '己方生存', max: 100 }
+        { name: "阻断成功率", max: 100 },
+        { name: "冲突控制", max: 100 },
+        { name: "效费比", max: 100 },
+        { name: "己方生存", max: 100 },
       ],
-      splitArea: { areaStyle: { color: ['rgba(0, 225, 255, 0.05)', 'rgba(0, 225, 255, 0.1)'] } },
-      axisLine: { lineStyle: { color: 'rgba(0, 225, 255, 0.3)' } },
-      splitLine: { lineStyle: { color: 'rgba(0, 225, 255, 0.3)' } },
-      axisName: { color: '#a0aec0', fontSize: 10 }
+      splitArea: {
+        areaStyle: {
+          color: ["rgba(0, 225, 255, 0.05)", "rgba(0, 225, 255, 0.1)"],
+        },
+      },
+      axisLine: { lineStyle: { color: "rgba(0, 225, 255, 0.3)" } },
+      splitLine: { lineStyle: { color: "rgba(0, 225, 255, 0.3)" } },
+      axisName: { color: "#a0aec0", fontSize: 10 },
     },
     series: [
       {
-        type: 'radar',
+        type: "radar",
         data: [
           {
             value: [blockScore, controlScore, costEfficiency, selfInterference],
-            name: '当前推演方案',
-            areaStyle: { color: 'rgba(0, 225, 255, 0.3)' },
-            lineStyle: { width: 2 }
-          }
-        ]
-      }
-    ]
+            name: "当前推演方案",
+            areaStyle: { color: "rgba(0, 225, 255, 0.3)" },
+            lineStyle: { width: 2 },
+          },
+        ],
+      },
+    ],
   };
   chartInstance.setOption(option);
 };
 
 watch(currentView, () => {
   nextTick(() => {
-    if (currentView.value === 'SANDBOX' && smallRadarChartRef.value) {
+    if (currentView.value === "SANDBOX" && smallRadarChartRef.value) {
       updateSmallRadar();
     }
   });
 });
-
 </script>
 
 <style lang="scss">
@@ -1076,7 +1369,6 @@ watch(currentView, () => {
 
 // Element Plus Dark Theme Overrides
 .left-sidebar {
-
   .el-select,
   .el-input,
   .el-input-number {
@@ -1105,7 +1397,6 @@ watch(currentView, () => {
   }
 
   .el-input-number {
-
     .el-input-number__increase,
     .el-input-number__decrease {
       background-color: #0b1836 !important;

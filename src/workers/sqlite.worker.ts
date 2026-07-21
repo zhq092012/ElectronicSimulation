@@ -7,67 +7,95 @@ import type {
   CommunicationWindow,
   Scenario,
 } from "../types/electronic";
-
+/**
+ * 数据库执行选项
+ */
 interface Sqlite3ExecOptions {
-  sql: string;
-  bind?: unknown[];
-  rowMode?: "object";
-  callback?: (row: any) => void;
+  sql: string; // SQL语句
+  bind?: unknown[]; // 绑定参数
+  rowMode?: "object"; // 返回行模式
+  callback?: (row: any) => void; // 回调函数
 }
-
+/**
+ * 数据库对象
+ */
 interface Sqlite3Database {
-  filename: string;
-  exec: (options: string | Sqlite3ExecOptions) => void;
-  changes: () => number;
+  filename: string; // 数据库文件名
+  exec: (options: string | Sqlite3ExecOptions) => void; // 执行SQL语句
+  changes: () => number; // 获取影响行数
 }
 
+/**
+ * 数据库库
+ */
 interface Sqlite3Library {
   version: {
-    libVersion: string;
+    libVersion: string; // 数据库版本
   };
   oo1: {
     OpfsDb: new (filename: string, flags: string) => Sqlite3Database;
   };
 }
 
-// 扩展了计算权重的 Asset 类型
+/**
+ * 扩展了计算权重的 Asset 类型
+ */
 interface CalculatedAsset extends Asset {
   calculated_priority?: number;
 }
 
-// 包含双行轨道数据(TLE)且非空的卫星信息
+/**
+ * 包含双行轨道数据(TLE)且非空的卫星信息
+ */
 interface SatTleInfo {
   id: string;
   tle_data: string;
 }
 
-// 包含有效位置信息的地面/低空基底资产
+/**
+ * 包含有效位置信息的地面/低空基底资产
+ */
 interface StationInfo {
   id: string;
-  lat: number;
-  lng: number;
-  alt: number | null;
-  terrain_mask_angle: number;
+  lat: number;//纬度
+  lng: number;//经度
+  alt: number | null;//高度
+  terrain_mask_angle: number;//地形遮挡角
 }
 
+/**
+ * 场景时间配置
+ */
 type ScenarioTimeConfig = Pick<
   Scenario,
-  "start_time" | "end_time" | "time_step_seconds"
+  "start_time" | "end_time" | "time_step_seconds" //场景开始时间|场景结束时间|场景时间步长（秒）
 >;
 
+/**
+ * 工作线程请求
+ * 'INIT': 初始化数据库
+ * 'CALCULATE_WINDOWS': 计算通信窗口
+ * 'UPDATE_SATELLITE_POSITIONS': 更新卫星位置
+ * 'AUTO_ALLOCATE_WEAPONS': 自动分配武器
+ * 'QUERY': 查询
+ * 'EXEC': 执行
+ */
 interface WorkerRequest {
   type:
-    | "INIT"
-    | "CALCULATE_WINDOWS"
-    | "UPDATE_SATELLITE_POSITIONS"
-    | "AUTO_ALLOCATE_WEAPONS"
-    | "QUERY"
-    | "EXEC";
-  id?: string;
-  sql?: string;
-  params?: any;
+  | "INIT"
+  | "CALCULATE_WINDOWS"
+  | "UPDATE_SATELLITE_POSITIONS"
+  | "AUTO_ALLOCATE_WEAPONS"
+  | "QUERY"
+  | "EXEC";
+  id?: string; // 请求ID
+  sql?: string; // SQL语句
+  params?: any; // 绑定参数
 }
 
+/**
+ * 数据库
+ */
 let db: Sqlite3Database | null = null;
 
 /**
@@ -100,7 +128,7 @@ async function initDb() {
     } catch (e) {
       try {
         db.exec("ROLLBACK;");
-      } catch (err) {}
+      } catch (err) { }
       throw e;
     }
 
@@ -114,7 +142,12 @@ async function initDb() {
 }
 
 /**
- * 球面半正矢公式 (Haversine Formula) 求解经纬度空间球面距离 (km)
+ * 球面半正矢公式 (Haversine Formula)
+ * @param lat1 纬度1
+ * @param lng1 经度1
+ * @param lat2 纬度2
+ * @param lng2 经度2
+ * @returns 经纬度空间球面距离 (km)
  */
 function calculateDistance(
   lat1: number,
@@ -124,20 +157,24 @@ function calculateDistance(
 ): number {
   if (lat1 === 0 && lng1 === 0) return -1; // 网络武器无物理距离限制
   const R = 6371; // 地球半径 (km)
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;//纬度差（弧度）
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;//经度差（弧度）
+
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLng / 2) *
+    Math.sin(dLng / 2);//中心角（弧度）
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));//中心角
+  return R * c;//球面距离（km）
 }
 
 /**
  * 核心推运对抗战术引擎 (Event Loop 打击判定与背包分配)
+ * @param intensity 推演烈度
+ * @param currentTime 当前时间戳
+ * @param scenarioId 场景ID
  * @param scenarioEndTime 场景结束时间戳 (Unix)，用于计算 HARD kill 的剩余破坏时长
  */
 function autoAllocateWeapons(
@@ -173,10 +210,10 @@ function autoAllocateWeapons(
 
   // 动态解算价值权重优先级
   assets.forEach((asset) => {
-    let score = asset.base_priority || 50;
-    if (asset.usage_type === "MILITARY") score += 30;
-    if (asset.func_type === "COMM" || asset.func_type === "RELAY") score += 20;
-    if (asset.layer === 2) score += 15; // 卫星
+    let score = asset.base_priority || 50;//基础目标价值分 (0-100, 默认 50)
+    if (asset.usage_type === "MILITARY") score += 30;//军事目标价值更高
+    if (asset.func_type === "COMM" || asset.func_type === "RELAY") score += 20;//通信或中继目标价值更高  'RECON' (侦察), 'COMM' (通信), 'RELAY' (中继), 'OTHER' (其他)
+    if (asset.layer === 2) score += 15; // 卫星价值更高
     asset.calculated_priority = score;
   });
 
@@ -194,8 +231,9 @@ function autoAllocateWeapons(
       weapons.push(row as Weapon);
     },
   });
-
   // 根据当前推演烈度过滤红方可用武器
+  // category:跨域杀伤机理分类 w.category:跨域杀伤机理分类,'EW':'电子战','CYBER':'网络战','KINETIC':'物理战','DEW':'定向能武器'
+  // kill_type:杀伤机理 SOFT:'软杀伤'，'HARD':'硬杀伤' 
   const allowedWeapons = weapons.filter((w) => {
     if (intensity === "LOW") {
       return (
@@ -359,7 +397,7 @@ function autoAllocateWeapons(
               attenuation_alt *
               attenuation_vel *
               attenuation_att) /
-              P_sig_recv,
+            P_sig_recv,
           );
         const final_js = Math.round(js * 100) / 100;
 
@@ -381,7 +419,7 @@ function autoAllocateWeapons(
           selectedWeapon.category === "KINETIC";
         const isSuccessful =
           (isHardKill || final_js >= threshold) &&
-          Math.random() <= successProbability
+            Math.random() <= successProbability
             ? 1
             : 0;
 
@@ -645,7 +683,7 @@ addEventListener("message", (event: MessageEvent<WorkerRequest>) => {
       } catch (innerError) {
         try {
           db.exec("ROLLBACK;");
-        } catch (e) {}
+        } catch (e) { }
         throw innerError;
       }
       postMessage({ id, type: "SUCCESS", message: "轨道视算计算完成" });
@@ -710,7 +748,7 @@ addEventListener("message", (event: MessageEvent<WorkerRequest>) => {
       } catch (innerError) {
         try {
           db.exec("ROLLBACK;");
-        } catch (e) {}
+        } catch (e) { }
         throw innerError;
       }
       postMessage({ id, type: "SUCCESS" });
