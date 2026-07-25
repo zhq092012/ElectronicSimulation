@@ -127,12 +127,18 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import * as echarts from 'echarts';
 import { sqliteClient } from '@/db/sqlite-client';
+import type { TacticalPlan } from '@/types/electronic';
+
+export interface PlanRecord extends TacticalPlan {
+  timeline_collapse_ratios?: string;
+  timeline_cumulative_costs?: string;
+}
 
 const radarChartRef = ref<HTMLDivElement | null>(null);
 const lineBarChartRef = ref<HTMLDivElement | null>(null);
 
 // Plan selection state
-const availablePlans = ref<any[]>([]);
+const availablePlans = ref<PlanRecord[]>([]);
 const selectedPlanA = ref('');
 const selectedPlanB = ref(''); // Default to no comparison plan
 
@@ -163,7 +169,7 @@ const onPlanChange = () => {
 };
 
 // Retrieve timeline arrays for a given plan (dynamically queries if active/plan-001, otherwise parses stored JSON)
-const loadPlanTimeline = async (plan: any) => {
+const loadPlanTimeline = async (plan: PlanRecord) => {
   if (plan.id !== 'plan-001' && plan.timeline_collapse_ratios && plan.timeline_cumulative_costs) {
     try {
       return {
@@ -182,7 +188,7 @@ const loadPlanTimeline = async (plan: any) => {
     const t = 1781683200 + m * 60;
 
     // Collapse ratio at this minute
-    const linksRes = await sqliteClient.query<any>(`
+    const linksRes = await sqliteClient.query<{ total: number; blocked: number }>(`
       SELECT COUNT(*) as total, 
              SUM(CASE WHEN link_status IN ('JAMMED', 'DESTROYED') THEN 1 ELSE 0 END) as blocked 
       FROM communication_windows 
@@ -194,7 +200,7 @@ const loadPlanTimeline = async (plan: any) => {
     collapseRatios.push(ratio);
 
     // Cumulative cost up to this minute
-    const costRes = await sqliteClient.query<any>(`
+    const costRes = await sqliteClient.query<{ total_cost: number }>(`
       SELECT SUM(w.action_cost) as total_cost 
       FROM engagements e
       JOIN weapons w ON e.weapon_id = w.id
@@ -213,7 +219,7 @@ const loadAndAggregateData = async () => {
   }
   try {
     // 1. Fetch all available plans in DB (excluding active plan-001)
-    const plansList = await sqliteClient.query<any>("SELECT * FROM tactical_plans WHERE id != 'plan-001'");
+    const plansList = await sqliteClient.query<PlanRecord>("SELECT * FROM tactical_plans WHERE id != 'plan-001'");
     availablePlans.value = plansList;
 
     // If selectedPlanA is no longer in the list (or invalid), default to the first plan if available

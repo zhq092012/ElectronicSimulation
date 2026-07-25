@@ -9,10 +9,13 @@ import type { ForceGraph3DInstance } from '3d-force-graph';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import SpriteText from 'three-spritetext';
+import type { GraphNode, GraphLink } from '../../types/electronic';
+
+const THREE_OBJ = THREE as any;
 
 const props = defineProps<{
-  nodes: any[];
-  links: any[];
+  nodes: GraphNode[];
+  links: GraphLink[];
 }>();
 
 const emit = defineEmits<{
@@ -27,8 +30,8 @@ onMounted(() => {
   if (!container.value) return;
 
   // 临时修改默认向上向量为 Z 轴，确保内部相机和 OrbitControls 的 Up 轴一致，防止旋转冲突锁死
-  const originalDefaultUp = THREE.Object3D.DEFAULT_UP.clone();
-  THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
+  const originalDefaultUp = THREE_OBJ.Object3D.DEFAULT_UP.clone();
+  THREE_OBJ.Object3D.DEFAULT_UP.set(0, 0, 1);
 
   Graph = new ForceGraph3D(container.value, { controlType: 'orbit' })
     .graphData({
@@ -39,35 +42,38 @@ onMounted(() => {
     .showNavInfo(false)
     .nodeLabel(() => '') // We use SpriteText instead of native tooltip for always-on labels
     .linkColor((link: any) => {
-      if (link.link_status === 'TRANSMITTING') return 'rgba(0, 102, 255, 0.6)';
-      if (link.link_status === 'JAMMED') return 'rgba(234, 179, 8, 0.6)';
-      if (link.link_status === 'DESTROYED') return 'rgba(0, 0, 0, 0)';
-      if (link.link_status === 'ENGAGEMENT') return 'rgba(255, 42, 95, 0.85)';
+      const l = link as GraphLink;
+      if (l.link_status === 'TRANSMITTING') return 'rgba(0, 102, 255, 0.6)';
+      if (l.link_status === 'JAMMED') return 'rgba(234, 179, 8, 0.6)';
+      if (l.link_status === 'DESTROYED') return 'rgba(0, 0, 0, 0)';
+      if (l.link_status === 'ENGAGEMENT') return 'rgba(255, 42, 95, 0.85)';
       return 'rgba(107, 114, 128, 0.25)';
     })
     .linkWidth((link: any) => {
-      if (link.link_status === 'TRANSMITTING') return 2.0;
-      if (link.link_status === 'JAMMED') return 1.5;
-      if (link.link_status === 'ENGAGEMENT') return 2.5;
+      const l = link as GraphLink;
+      if (l.link_status === 'TRANSMITTING') return 2.0;
+      if (l.link_status === 'JAMMED') return 1.5;
+      if (l.link_status === 'ENGAGEMENT') return 2.5;
       return 0.5;
     })
     .linkMaterial((link: any) => {
-      if (link.link_status === 'JAMMED') {
-        return new THREE.LineDashedMaterial({
+      const l = link as GraphLink;
+      if (l.link_status === 'JAMMED') {
+        return new THREE_OBJ.LineDashedMaterial({
           color: 0xeab308,
           dashSize: 5,
           gapSize: 3,
           transparent: true,
           opacity: 0.8
         });
-      } else if (link.link_status === 'DESTROYED') {
-        return new THREE.LineBasicMaterial({
+      } else if (l.link_status === 'DESTROYED') {
+        return new THREE_OBJ.LineBasicMaterial({
           color: 0x000000,
           transparent: true,
           opacity: 0
         });
-      } else if (link.link_status === 'ENGAGEMENT') {
-        return new THREE.LineBasicMaterial({
+      } else if (l.link_status === 'ENGAGEMENT') {
+        return new THREE_OBJ.LineBasicMaterial({
           color: 0xff2a5f,
           transparent: true,
           opacity: 0.9
@@ -76,30 +82,34 @@ onMounted(() => {
       return false; // Use default material
     })
     .linkDirectionalParticles((link: any) => {
-      if (link.link_status === 'TRANSMITTING') return 3;
-      if (link.link_status === 'JAMMED') return 1;
-      if (link.link_status === 'ENGAGEMENT') return 4;
+      const l = link as GraphLink;
+      if (l.link_status === 'TRANSMITTING') return 3;
+      if (l.link_status === 'JAMMED') return 1;
+      if (l.link_status === 'ENGAGEMENT') return 4;
       return 0;
     })
     .linkDirectionalParticleColor((link: any) => {
-      if (link.link_status === 'TRANSMITTING') return '#00e1ff';
-      if (link.link_status === 'JAMMED') return '#eab308';
-      if (link.link_status === 'ENGAGEMENT') return '#ff2a5f';
+      const l = link as GraphLink;
+      if (l.link_status === 'TRANSMITTING') return '#00e1ff';
+      if (l.link_status === 'JAMMED') return '#eab308';
+      if (l.link_status === 'ENGAGEMENT') return '#ff2a5f';
       return '#4b5563';
     })
     .linkDirectionalParticleWidth(2.5)
     .linkDirectionalParticleSpeed((link: any) => {
-      if (link.link_status === 'JAMMED') return 0.003;
-      if (link.link_status === 'ENGAGEMENT') return 0.016;
+      const l = link as GraphLink;
+      if (l.link_status === 'JAMMED') return 0.003;
+      if (l.link_status === 'ENGAGEMENT') return 0.016;
       return 0.012;
     })
     .onNodeClick((node: any) => {
-      const type = node.id.startsWith('weapon-') ? 'WEAPON' : 'ASSET';
-      emit('select-node', node.id, type);
+      const n = node as GraphNode;
+      const type = n.id && n.id.startsWith('weapon-') ? 'WEAPON' : 'ASSET';
+      emit('select-node', n.id || '', type);
     });
 
   // 恢复默认的向上向量为 Y 轴，避免污染其他组件
-  THREE.Object3D.DEFAULT_UP.copy(originalDefaultUp);
+  THREE_OBJ.Object3D.DEFAULT_UP.copy(originalDefaultUp);
 
   // Force Directed Layout & Bounding Box
   Graph!.onEngineTick(() => {
@@ -128,7 +138,7 @@ onMounted(() => {
   ];
 
   gridConfigs.forEach(config => {
-    const grid = new THREE.GridHelper(500, 30, config.color, config.color);
+    const grid = new THREE_OBJ.GridHelper(500, 30, config.color, config.color);
     grid.position.z = config.z;
     grid.rotation.x = Math.PI / 2;
 
@@ -142,14 +152,15 @@ onMounted(() => {
 
   // Custom 3D Objects with Labels
   Graph!.nodeThreeObject((node: any) => {
-    const isDestroyed = node.anti_jam_level === 0 && node.base_priority === 0;
+    const n = node as GraphNode;
+    const isDestroyed = n.anti_jam_level === 0 && n.base_priority === 0;
 
-    let color = node.side === 'RED' ? '#ff2a5f' : '#00e1ff';
+    let color = n.side === 'RED' ? '#ff2a5f' : '#00e1ff';
     if (isDestroyed) {
       color = '#374151'; // Destroyed goes dark
     }
 
-    const material = new THREE.MeshLambertMaterial({
+    const material = new THREE_OBJ.MeshLambertMaterial({
       color,
       transparent: true,
       opacity: 0.85,
@@ -157,41 +168,41 @@ onMounted(() => {
       emissiveIntensity: isDestroyed ? 0.6 : 0
     });
 
-    const group = new THREE.Group();
+    const group = new THREE_OBJ.Group();
     let mesh;
 
-    if (node.asset_class === 'SATELLITE') {
-      const body = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 12), material);
-      const wingMat = new THREE.MeshLambertMaterial({ color: isDestroyed ? '#1f2937' : '#2d3748', transparent: true, opacity: 0.65 });
-      const leftWing = new THREE.Mesh(new THREE.BoxGeometry(18, 3, 0.5), wingMat);
+    if (n.asset_class === 'SATELLITE') {
+      const body = new THREE_OBJ.Mesh(new THREE_OBJ.SphereGeometry(6, 12, 12), material);
+      const wingMat = new THREE_OBJ.MeshLambertMaterial({ color: isDestroyed ? '#1f2937' : '#2d3748', transparent: true, opacity: 0.65 });
+      const leftWing = new THREE_OBJ.Mesh(new THREE_OBJ.BoxGeometry(18, 3, 0.5), wingMat);
       body.add(leftWing);
       mesh = body;
-    } else if (node.asset_class === 'DRONE') {
-      mesh = new THREE.Mesh(new THREE.ConeGeometry(5, 12, 4), material);
+    } else if (n.asset_class === 'DRONE') {
+      mesh = new THREE_OBJ.Mesh(new THREE_OBJ.ConeGeometry(5, 12, 4), material);
       mesh.rotation.x = Math.PI / 2;
-    } else if (node.asset_class === 'STATION') {
-      mesh = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 8, 8), material);
+    } else if (n.asset_class === 'STATION') {
+      mesh = new THREE_OBJ.Mesh(new THREE_OBJ.CylinderGeometry(5, 5, 8, 8), material);
       mesh.rotation.x = Math.PI / 2;
-    } else if (node.asset_class === 'COMMAND_CENTER') {
-      mesh = new THREE.Mesh(new THREE.BoxGeometry(8, 8, 8), material);
-    } else if (node.id.startsWith('weapon-')) {
-      mesh = new THREE.Mesh(new THREE.ConeGeometry(6, 14, 4), material);
+    } else if (n.asset_class === 'COMMAND_CENTER') {
+      mesh = new THREE_OBJ.Mesh(new THREE_OBJ.BoxGeometry(8, 8, 8), material);
+    } else if (n.id && n.id.startsWith('weapon-')) {
+      mesh = new THREE_OBJ.Mesh(new THREE_OBJ.ConeGeometry(6, 14, 4), material);
       mesh.rotation.x = -Math.PI / 2;
     } else {
-      mesh = new THREE.Mesh(new THREE.SphereGeometry(5, 8, 8), material);
+      mesh = new THREE_OBJ.Mesh(new THREE_OBJ.SphereGeometry(5, 8, 8), material);
     }
 
     group.add(mesh);
 
     // SpriteText Label
-    const usageStr = node.usage_type === 'MILITARY' ? '(军用)' : node.usage_type === 'CIVIL_COMMERCIAL' ? '(民用)' : '';
-    const classStr = node.asset_class ? `[${node.asset_class}]` : '';
-    const nameStr = node.name || node.id;
+    const usageStr = n.usage_type === 'MILITARY' ? '(军用)' : n.usage_type === 'CIVIL_COMMERCIAL' ? '(民用)' : '';
+    const classStr = n.asset_class ? `[${n.asset_class}]` : '';
+    const nameStr = n.name || n.id || '';
 
     const label = new SpriteText(`${nameStr}\n${classStr} ${usageStr}`);
-    label.color = node.side === 'RED' ? '#ff87a3' : '#a5f3fc';
+    label.color = n.side === 'RED' ? '#ff87a3' : '#a5f3fc';
     label.textHeight = 3.5;
-    label.position.set(0, -12, 0); // Display below the mesh
+    (label as any).position.set(0, -12, 0); // Display below the mesh
     group.add(label);
 
     return group;

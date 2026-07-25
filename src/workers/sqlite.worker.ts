@@ -6,7 +6,16 @@ import type {
   Weapon,
   CommunicationWindow,
   Scenario,
+  PassMatrixItem,
+  VisibleMatrixItem,
+  OverheadMatrixItem,
+  OverheadMatrixTick,
+  OverheadMatrixSegment,
+  AttackMatrixItem,
+  TacticalMatrices,
+  LinkStatus,
 } from "../types/electronic";
+
 /**
  * 数据库执行选项
  */
@@ -86,6 +95,7 @@ interface WorkerRequest {
   | "CALCULATE_WINDOWS"
   | "UPDATE_SATELLITE_POSITIONS"
   | "AUTO_ALLOCATE_WEAPONS"
+  | "GENERATE_MATRICES"
   | "QUERY"
   | "EXEC";
   id?: string; // 请求ID
@@ -526,6 +536,403 @@ function autoAllocateWeapons(
     throw error;
   }
 }
+/**
+ * 解算四大战术算力矩阵 (passMatrix, visibleMatrix, overheadMatrix, attackMatrix)
+ */
+function generateMatrices(scenarioId: string): TacticalMatrices {
+  if (!db) throw new Error('Database is not initialized');
+  const activeDb = db;
+
+  // 1. 获取场景时间配置与战区范围
+  const scenarios: Scenario[] = [];
+  activeDb.exec({
+    sql: `SELECT start_time, end_time, time_step_seconds, min_lat, max_lat, min_lng, max_lng FROM scenarios WHERE id = ?`,
+    bind: [scenarioId],
+    rowMode: 'object',
+    callback: (row: any) => { scenarios.push(row as Scenario); }
+  });
+  if (scenarios.length === 0) throw new Error(`Scenario ${scenarioId} not found`);
+  const { start_time, end_time, time_step_seconds, min_lat, max_lat, min_lng, max_lng } = scenarios[0];
+
+  // 2. 解算 passMatrix (空间卫星过境战区时间序列)
+  const satAssets: { id: string; tle_data: string }[] = [];
+  activeDb.exec({
+    sql: `SELECT id, tle_data FROM assets WHERE layer = 2 AND tle_data IS NOT NULL`,
+    rowMode: 'object',
+    callback: (row: any) => { satAssets.push(row); }
+  });
+
+  const passMatrix: PassMatrixItem[] = [];
+  satAssets.forEach(sat => {
+    try {
+      const lines = sat.tle_data.split(/\r?\n|\\n/).map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+      if (lines.length >= 2) {
+        const satrec = satellite.twoline2satrec(lines[0], lines[1]);
+        const windows: { window_start: number; window_end: number }[] = [];
+        let inAreaStart: number | null = null;
+
+        let matchCount = 0;
+        for (let t = start_time; t <= end_time; t += time_step_seconds) {
+          const date = new Date(t * 1000);
+          const gmst = satellite.gstime(date);
+          const posAndVel = satellite.propagate(satrec, date);
+          if (posAndVel && posAndVel.position && typeof posAndVel.position !== 'boolean') {
+            const geodetic = satellite.eciToGeodetic(posAndVel.position, gmst);
+            const lat = satellite.radiansToDegrees(geodetic.latitude);
+            const lng = satellite.radiansToDegrees(geodetic.longitude);
+
+            // 空间卫星过境战场网络大本营与海峡战区广域覆盖视界判定 (广域东亚/西太平洋天基过境视角)
+            const isInside = lat >= Math.max(-90, min_lat - 15.0) && lat <= Math.min(90, max_lat + 25.0) &&
+                             lng >= Math.max(-180, min_lng - 30.0) && lng <= Math.min(180, max_lng + 25.0);
+            if (isInside) {
+              if (inAreaStart === null) inAreaStart = t;
+            } else {
+              if (inAreaStart !== null) {
+                if (t > inAreaStart) {
+                  windows.push({ window_start: inAreaStart, window_end: t });
+                }
+                inAreaStart = null;
+              }
+            }
+          }
+        }
+        if (inAreaStart !== null && end_time > inAreaStart) {
+          windows.push({ window_start: inAreaStart, window_end: end_time });
+        }
+
+        // 双保险保底：若极短推演时间内空间投影未落在特定经纬框，但卫星已与战区节点建立实际通视，则提取通视时间作为过境感知窗口
+        if (windows.length === 0) {
+          activeDb.exec({
+            sql: `SELECT DISTINCT window_start, window_end FROM communication_windows WHERE source_id = ? OR target_id = ?`,
+            bind: [sat.id, sat.id],
+            rowMode: 'object',
+            callback: (cwRow: any) => {
+              windows.push({ window_start: cwRow.window_start, window_end: cwRow.window_end });
+            }
+          });
+        }
+
+        console.log(`[PassMatrix Debug] Sat: ${sat.id}, matchCount: ${matchCount}, windows: ${windows.length}`);
+        passMatrix.push({
+          sat_id: sat.id,
+          sat_name: sat.id,
+          windows
+        });
+      }
+    } catch (e) {
+      console.error(`Error calculating passMatrix for ${sat.id}:`, e);
+    }
+  });
+
+  // 3. 解算 visibleMatrix (星地通视时间窗口序列)
+  const visibleMatrixMap = new Map<string, VisibleMatrixItem>();
+  activeDb.exec({
+    sql: `
+      SELECT cw.source_id, a1.id as source_name, cw.target_id, a2.id as target_name, cw.window_start, cw.window_end
+      FROM communication_windows cw
+      JOIN assets a1 ON cw.source_id = a1.id
+      JOIN assets a2 ON cw.target_id = a2.id
+      WHERE cw.scenario_id = ? AND a1.layer = 2 AND a2.layer IN (0, 1)
+      ORDER BY cw.source_id, cw.target_id, cw.window_start
+    `,
+    bind: [scenarioId],
+    rowMode: 'object',
+    callback: (row: any) => {
+      const key = `${row.source_id}::${row.target_id}`;
+      if (!visibleMatrixMap.has(key)) {
+        visibleMatrixMap.set(key, {
+          source_id: row.source_id,
+          source_name: row.source_name,
+          target_id: row.target_id,
+          target_name: row.target_name,
+          windows: []
+        });
+      }
+      const item = visibleMatrixMap.get(key);
+      if (item) {
+        item.windows.push({
+          window_start: row.window_start,
+          window_end: row.window_end
+        });
+      }
+    }
+  });
+  const visibleMatrix = Array.from(visibleMatrixMap.values());
+
+  // 4. 解算 overheadMatrix (全域链路处理与传输时间开销，计算从 start_time 到 end_time 全时间轴每个 Tick 的动态延时)
+  const engagementEvents: { action_time: number; is_successful: number; kill_type: string; source_id: string; target_id: string }[] = [];
+  activeDb.exec({
+    sql: `
+      SELECT e.action_time, e.is_successful, w.kill_type, cw.source_id, cw.target_id
+      FROM engagements e
+      JOIN weapons w ON e.weapon_id = w.id
+      JOIN communication_windows cw ON e.target_window_id = cw.id
+      WHERE e.is_successful = 1
+    `,
+    rowMode: 'object',
+    callback: (row: any) => { engagementEvents.push(row); }
+  });
+
+  const overheadMatrix: OverheadMatrixItem[] = [];
+  activeDb.exec({
+    sql: `
+      SELECT cw.source_id, a1.id as source_name, a1.layer as source_layer,
+             cw.target_id, a2.id as target_name, a2.layer as target_layer,
+             cw.routing_converge_delay, cw.link_status
+      FROM communication_windows cw
+      JOIN assets a1 ON cw.source_id = a1.id
+      JOIN assets a2 ON cw.target_id = a2.id
+      WHERE cw.scenario_id = ? 
+        AND ((a1.layer = 2 AND a2.layer = 1) OR (a1.layer = 1 AND a2.layer = 0))
+      ORDER BY a1.layer DESC, cw.source_id, cw.target_id
+    `,
+    bind: [scenarioId],
+    rowMode: 'object',
+    callback: (row: any) => {
+      const transDelay = row.routing_converge_delay || (row.source_layer === 2 ? 20 : 30);
+      const procDelay = row.source_layer === 2 ? 10 : 15; // 卫星星载解包或接收站固有的硬件处理开销(秒)
+
+      // 匹配影响此链路节点的真实交战动作
+      const relevantEvents = engagementEvents.filter(e =>
+        e.source_id === row.source_id || e.target_id === row.source_id ||
+        e.source_id === row.target_id || e.target_id === row.target_id
+      );
+
+      // 计算从 start_time 到 end_time 范围内每一个 Tick 的延时开销
+      const ticks: OverheadMatrixTick[] = [];
+      let currentSeg: OverheadMatrixSegment | null = null;
+      const segments: OverheadMatrixSegment[] = [];
+
+      for (let t = start_time; t <= end_time; t += time_step_seconds) {
+        const tickMin = Math.floor((t - start_time) / 60);
+
+        // 判定该 Tick 时刻是否受交战或状态影响
+        const triggeredEvents = relevantEvents.filter(e => e.action_time <= t);
+        let tickStatus = 'TRANSMITTING';
+        let tickExtraDelay = 0;
+
+        if (triggeredEvents.length > 0) {
+          const hasHard = triggeredEvents.some(e => e.kill_type === 'HARD');
+          if (hasHard) {
+            tickStatus = 'DESTROYED';
+            tickExtraDelay = 300;
+          } else {
+            tickStatus = 'JAMMED';
+            tickExtraDelay = 45;
+          }
+        } else if (row.link_status === 'JAMMED') {
+          tickStatus = 'JAMMED';
+          tickExtraDelay = 45;
+        } else if (row.link_status === 'DESTROYED') {
+          tickStatus = 'DESTROYED';
+          tickExtraDelay = 300;
+        }
+
+        const totalOverhead = transDelay + procDelay + tickExtraDelay;
+
+        ticks.push({
+          time: t,
+          tick_min: tickMin,
+          status: tickStatus,
+          trans_delay: transDelay,
+          proc_delay: procDelay,
+          extra_delay: tickExtraDelay,
+          total_overhead: totalOverhead
+        });
+
+        // 压缩连续相同延时的时序区间段
+        if (!currentSeg || currentSeg.status !== tickStatus || currentSeg.total_overhead !== totalOverhead) {
+          if (currentSeg) {
+            currentSeg.end_min = tickMin;
+            segments.push(currentSeg);
+          }
+          currentSeg = {
+            start_min: tickMin,
+            end_min: tickMin,
+            status: tickStatus,
+            trans_delay: transDelay,
+            proc_delay: procDelay,
+            extra_delay: tickExtraDelay,
+            total_overhead: totalOverhead
+          };
+        } else {
+          currentSeg.end_min = tickMin;
+        }
+      }
+      if (currentSeg) {
+        segments.push(currentSeg);
+      }
+
+      const totalSum = ticks.reduce((acc, curr) => acc + curr.total_overhead, 0);
+      const avgOverhead = Math.round(totalSum / ticks.length);
+      const maxOverhead = Math.max(...ticks.map(t => t.total_overhead));
+      const minOverhead = Math.min(...ticks.map(t => t.total_overhead));
+      const lastTick = ticks.length > 0 ? ticks[ticks.length - 1] : undefined;
+
+      overheadMatrix.push({
+        source_id: row.source_id,
+        source_name: row.source_name,
+        source_layer: row.source_layer,
+        target_id: row.target_id,
+        target_name: row.target_name,
+        target_layer: row.target_layer,
+        link_type: row.source_layer === 2 ? 'SAT_TO_STATION' : 'STATION_TO_CMD',
+        trans_delay: transDelay,
+        proc_delay: procDelay,
+        extra_delay: lastTick ? lastTick.extra_delay : 0,
+        total_overhead: lastTick ? lastTick.total_overhead : (transDelay + procDelay),
+        link_status: (lastTick ? lastTick.status : row.link_status) as LinkStatus,
+        avg_overhead: avgOverhead,
+        max_overhead: maxOverhead,
+        min_overhead: minOverhead,
+        ticks,
+        segments
+      });
+    }
+  });
+
+  // 5. 解算 attackMatrix (武器对全域节点的可打击窗口序列与实战叠加延时)
+  const weapons: Weapon[] = [];
+  activeDb.exec({
+    sql: `SELECT * FROM weapons`,
+    rowMode: 'object',
+    callback: (row: any) => { weapons.push(row as Weapon); }
+  });
+
+  const blueAssets: Asset[] = [];
+  activeDb.exec({
+    sql: `SELECT id, layer, asset_class, lat, lng, alt, tle_data FROM assets WHERE side = 'BLUE'`,
+    rowMode: 'object',
+    callback: (row: any) => { blueAssets.push(row as Asset); }
+  });
+
+  // 查询推演中已实际成功发生的交战开火记录 (weapon_id 与关联资产)
+  const executedEngagements = new Set<string>();
+  activeDb.exec({
+    sql: `
+      SELECT e.weapon_id, cw.source_id, cw.target_id
+      FROM engagements e
+      JOIN communication_windows cw ON e.target_window_id = cw.id
+      WHERE e.is_successful = 1
+    `,
+    rowMode: 'object',
+    callback: (row: any) => {
+      executedEngagements.add(`${row.weapon_id}::${row.source_id}`);
+      executedEngagements.add(`${row.weapon_id}::${row.target_id}`);
+    }
+  });
+
+  const attackMatrix: AttackMatrixItem[] = [];
+
+  weapons.forEach(w => {
+    blueAssets.forEach(a => {
+      const theoreticalDelay = w.kill_type === 'HARD' ? 300 : 45; // 理论可造成延时
+      const isExecuted = executedEngagements.has(`${w.id}::${a.id}`); // 实际是否已分配/开火打击
+      const actualDelay = isExecuted ? theoreticalDelay : 0;          // 实际打击已叠加延时 (未打则为 0)
+
+      if (w.category === 'CYBER') {
+        // 网络协议攻击全时段有效
+        attackMatrix.push({
+          weapon_id: w.id,
+          weapon_name: w.name,
+          category: w.category,
+          kill_type: w.kill_type,
+          target_id: a.id,
+          target_name: a.id,
+          target_layer: a.layer,
+          theoretical_delay: theoreticalDelay,
+          actual_delay: actualDelay,
+          is_executed: isExecuted,
+          action_cost: w.action_cost,
+          windows: [{ window_start: start_time, window_end: end_time }]
+        });
+      } else if (a.layer === 0 || a.layer === 1) {
+        // 定向打击地基节点
+        const aLat = a.lat || 24.5;
+        const aLng = a.lng || 121.5;
+        const dist = calculateDistance(w.base_lat, w.base_lng, aLat, aLng);
+        if (w.max_range === -1 || (dist > 0 && dist <= w.max_range)) {
+          attackMatrix.push({
+            weapon_id: w.id,
+            weapon_name: w.name,
+            category: w.category,
+            kill_type: w.kill_type,
+            target_id: a.id,
+            target_name: a.id,
+            target_layer: a.layer,
+            theoretical_delay: theoreticalDelay,
+            actual_delay: actualDelay,
+            is_executed: isExecuted,
+            action_cost: w.action_cost,
+            windows: [{ window_start: start_time, window_end: end_time }]
+          });
+        }
+      } else if (a.layer === 2 && a.tle_data) {
+        // 动态判定武器对高空卫星的有效打击窗口
+        try {
+          const lines = a.tle_data.split(/\r?\n|\\n/).map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+          if (lines.length >= 2) {
+            const satrec = satellite.twoline2satrec(lines[0], lines[1]);
+            const windows: { window_start: number; window_end: number }[] = [];
+            let attackStart: number | null = null;
+
+            for (let t = start_time; t <= end_time; t += time_step_seconds) {
+              const date = new Date(t * 1000);
+              const gmst = satellite.gstime(date);
+              const posAndVel = satellite.propagate(satrec, date);
+              if (posAndVel && posAndVel.position && typeof posAndVel.position !== 'boolean') {
+                const geodetic = satellite.eciToGeodetic(posAndVel.position, gmst);
+                const satLat = satellite.radiansToDegrees(geodetic.latitude);
+                const satLng = satellite.radiansToDegrees(geodetic.longitude);
+                const dist = calculateDistance(w.base_lat, w.base_lng, satLat, satLng);
+
+                const inRange = w.max_range === -1 || (dist > 0 && dist <= w.max_range);
+                if (inRange) {
+                  if (attackStart === null) attackStart = t;
+                } else {
+                  if (attackStart !== null) {
+                    if (t > attackStart) {
+                      windows.push({ window_start: attackStart, window_end: t });
+                    }
+                    attackStart = null;
+                  }
+                }
+              }
+            }
+            if (attackStart !== null && end_time > attackStart) {
+              windows.push({ window_start: attackStart, window_end: end_time });
+            }
+            if (windows.length > 0) {
+              attackMatrix.push({
+                weapon_id: w.id,
+                weapon_name: w.name,
+                category: w.category,
+                kill_type: w.kill_type,
+                target_id: a.id,
+                target_name: a.id,
+                target_layer: a.layer,
+                theoretical_delay: theoreticalDelay,
+                actual_delay: actualDelay,
+                is_executed: isExecuted,
+                action_cost: w.action_cost,
+                windows
+              });
+            }
+          }
+        } catch (e) {
+          console.error(`Error calculating attackMatrix for ${w.id} -> ${a.id}:`, e);
+        }
+      }
+    });
+  });
+
+  return {
+    passMatrix,
+    visibleMatrix,
+    overheadMatrix,
+    attackMatrix
+  };
+}
 
 // 监听主线程的消息
 addEventListener("message", (event: MessageEvent<WorkerRequest>) => {
@@ -787,7 +1194,22 @@ addEventListener("message", (event: MessageEvent<WorkerRequest>) => {
     return;
   }
 
-  // 3. 常规 SQL 命令处理
+  // 3. 算力矩阵解算处理
+  if (type === "GENERATE_MATRICES") {
+    try {
+      const scenarioId = (params && params[0]) || "scen-001";
+      const matrices = generateMatrices(scenarioId);
+      postMessage({ id, type: "SUCCESS", result: matrices });
+    } catch (error) {
+      console.error("Generate Matrices Error:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      postMessage({ id, type: "ERROR", error: errorMessage });
+    }
+    return;
+  }
+
+  // 4. 常规 SQL 命令处理
   try {
     if (type === "QUERY") {
       if (!sql) {

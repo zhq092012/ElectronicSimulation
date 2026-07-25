@@ -64,7 +64,7 @@ export type KillType = 'SOFT' | 'HARD';
  * 'JAMMED':'被干扰'
  * 'DESTROYED':'被摧毁'
  */
-export type LinkStatus = 'PENDING' | 'TRANSMITTING' | 'JAMMED' | 'DESTROYED';
+export type LinkStatus = 'PENDING' | 'TRANSMITTING' | 'JAMMED' | 'DESTROYED' | 'ENGAGEMENT';
 
 /**
  * 推演方案预设冲突严重烈度等级
@@ -171,3 +171,163 @@ export interface Engagement {
   final_js_ratio: number;         // 综合上述 5 种空间物理衰减因子后，计算出的最终有效干信比 (J/S Ratio)
   is_successful: 0 | 1;           // 0-拦截失败，1-拦截成功 (高于或低于蓝方抗干扰解扩门槛)
 }
+
+/**
+ * 时间窗口结构体
+ */
+export interface TimeWindow {
+  window_start: number;
+  window_end: number;
+}
+
+/**
+ * 7. 算法矩阵——1. 空间卫星过境矩阵项
+ */
+export interface PassMatrixItem {
+  sat_id: string;
+  sat_name: string;
+  windows: TimeWindow[];
+}
+
+/**
+ * 7. 算法矩阵——2. 星地通视矩阵项
+ */
+export interface VisibleMatrixItem {
+  source_id: string;
+  source_name: string;
+  target_id: string;
+  target_name: string;
+  windows: TimeWindow[];
+}
+
+/**
+ * 7. 算法矩阵——3. 传输时延开销 Tick 明细
+ */
+export interface OverheadMatrixTick {
+  time: number;
+  tick_min: number;
+  status: LinkStatus | string;
+  trans_delay: number;
+  proc_delay: number;
+  extra_delay: number;
+  total_overhead: number;
+}
+
+/**
+ * 7. 算法矩阵——3. 传输时延开销压缩时间段
+ */
+export interface OverheadMatrixSegment {
+  start_min: number;
+  end_min: number;
+  status: LinkStatus | string;
+  trans_delay: number;
+  proc_delay: number;
+  extra_delay: number;
+  total_overhead: number;
+}
+
+/**
+ * 7. 算法矩阵——3. 传输时延矩阵项
+ */
+export interface OverheadMatrixItem {
+  source_id: string;
+  source_name: string;
+  source_layer: BattlefieldLayer;
+  target_id: string;
+  target_name: string;
+  target_layer: BattlefieldLayer;
+  link_type: 'SAT_TO_STATION' | 'STATION_TO_CMD';
+  trans_delay: number;
+  proc_delay: number;
+  extra_delay: number;
+  total_overhead: number;
+  link_status: LinkStatus;
+  avg_overhead: number;
+  max_overhead: number;
+  min_overhead: number;
+  ticks: OverheadMatrixTick[];
+  segments: OverheadMatrixSegment[];
+}
+
+/**
+ * 7. 算法矩阵——4. 武器打击矩阵项
+ */
+export interface AttackMatrixItem {
+  weapon_id: string;
+  weapon_name: string;
+  category: WeaponCategory;
+  kill_type: KillType;
+  target_id: string;
+  target_name: string;
+  target_layer: BattlefieldLayer;
+  theoretical_delay: number;
+  actual_delay: number;
+  is_executed: boolean;
+  action_cost: number;
+  windows: TimeWindow[];
+}
+
+/**
+ * 四大全域战术算法矩阵集合
+ */
+export interface TacticalMatrices {
+  passMatrix: PassMatrixItem[];
+  visibleMatrix: VisibleMatrixItem[];
+  overheadMatrix: OverheadMatrixItem[];
+  attackMatrix: AttackMatrixItem[];
+}
+
+/**
+ * 3D 拓扑图节点类型
+ */
+export interface GraphNode extends Partial<Asset> {
+  id: string;
+  name?: string;
+  x?: number;
+  y?: number;
+  z?: number;
+  vx?: number;
+  vy?: number;
+  vz?: number;
+  fx?: number | null;
+  fy?: number | null;
+  fz?: number | null;
+  __threeObj?: unknown;
+}
+
+/**
+ * 3D 拓扑图连线类型
+ */
+export interface GraphLink {
+  id: string;
+  source: string | GraphNode;
+  target: string | GraphNode;
+  window_start: number;
+  window_end: number;
+  routing_converge_delay: number;
+  link_status: LinkStatus;
+  scenario_id?: string;
+  source_id?: string;
+  target_id?: string;
+}
+
+/**
+ * 武器智能打击分配矩阵行
+ */
+export interface WeaponAssignmentRow {
+  weapon_id: string;
+  weapon_name: string;
+  weapon_category: WeaponCategory;
+  kill_type: KillType;
+  action_cost: number;
+  max_range: number;
+  window_id: string;
+  target_source_id: string;
+  target_dest_id: string;
+  window_start: number;
+  window_end: number;
+  theoretical_delay: number;
+  cost_benefit_ratio: number;
+  recommended: boolean;
+}
+

@@ -44,12 +44,19 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue';
 import { sqliteClient } from '@/db/sqlite-client';
+import type { Engagement, KillType } from '@/types/electronic';
+
+export interface ActiveEngagement extends Engagement {
+  weaponName: string;
+  kill_type: KillType;
+  targetName: string;
+}
 
 const props = defineProps<{
   currentTime: number; // Unix timestamp for current sim tick
 }>();
 
-const activeEngagements = ref<any[]>([]);
+const activeEngagements = ref<ActiveEngagement[]>([]);
 
 const fetchEngagements = async () => {
   if (!sqliteClient.isInitialized.value) {
@@ -62,7 +69,7 @@ const fetchEngagements = async () => {
 
   // Find engagements active exactly at this minute
   try {
-    const res = await sqliteClient.query<any>(`
+    const res = await sqliteClient.query<ActiveEngagement>(`
       SELECT e.*, w.name as weaponName, w.kill_type, 
              (a_src.id || ' ↔ ' || a_tgt.id) as targetName
       FROM engagements e
@@ -78,7 +85,7 @@ const fetchEngagements = async () => {
   }
 };
 
-const tableRowClassName = ({ row }: { row: any }) => {
+const tableRowClassName = ({ row }: { row: ActiveEngagement }) => {
   if (row.kill_type === 'HARD') return 'bg-red-950/20';
   return 'bg-yellow-950/10';
 };

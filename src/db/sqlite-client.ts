@@ -1,8 +1,9 @@
 import { ref } from 'vue';
+import type { TacticalMatrices } from '../types/electronic';
 
 class SQLiteClient {
   private worker: Worker | null = null;
-  private pendingQueries = new Map<string, { resolve: Function; reject: Function }>();
+  private pendingQueries = new Map<string, { resolve: (value: unknown) => void; reject: (reason?: unknown) => void }>();
   
   private initResolver: (() => void) | null = null;
   private initRejecter: ((err: Error) => void) | null = null;
@@ -42,21 +43,21 @@ class SQLiteClient {
       }
 
       const pending = this.pendingQueries.get(id);
-      if (pending) {
-        this.pendingQueries.delete(id);
-        if (type === 'SUCCESS') {
-          pending.resolve(result !== undefined ? result : { changes });
-        } else {
-          pending.reject(new Error(error));
-        }
+      if (!pending) return;
+
+      if (type === 'SUCCESS') {
+        pending.resolve(result !== undefined ? result : { changes });
+      } else if (type === 'ERROR') {
+        pending.reject(new Error(error));
       }
+      this.pendingQueries.delete(id);
     };
   }
 
   /**
-   * 初始化数据库进程
+   * 等待数据库 Worker 初始化完成
    */
-  public init(): Promise<void> {
+  public ready(): Promise<void> {
     if (this.isInitialized.value) return Promise.resolve();
     if (this.initError.value) return Promise.reject(new Error(this.initError.value));
     
@@ -67,13 +68,17 @@ class SQLiteClient {
     });
   }
 
+  public init(): Promise<void> {
+    return this.ready();
+  }
+
   /**
    * 发送指令到 Web Worker
    */
-  private send<T>(type: 'QUERY' | 'EXEC' | 'CALCULATE_WINDOWS' | 'AUTO_ALLOCATE_WEAPONS' | 'UPDATE_SATELLITE_POSITIONS', sql: string, params?: any[]): Promise<T> {
+  private send<T>(type: 'QUERY' | 'EXEC' | 'CALCULATE_WINDOWS' | 'AUTO_ALLOCATE_WEAPONS' | 'UPDATE_SATELLITE_POSITIONS' | 'GENERATE_MATRICES', sql: string, params?: unknown[]): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const id = Math.random().toString(36).substring(2, 9);
-      this.pendingQueries.set(id, { resolve, reject });
+      this.pendingQueries.set(id, { resolve: resolve as (val: unknown) => void, reject });
       this.worker?.postMessage({ type, id, sql, params });
     });
   }
@@ -81,14 +86,14 @@ class SQLiteClient {
   /**
    * 执行查询语句 (返回行数据对象数组)
    */
-  public query<T>(sql: string, params?: any[]): Promise<T[]> {
+  public query<T>(sql: string, params?: unknown[]): Promise<T[]> {
     return this.send<T[]>('QUERY', sql, params);
   }
 
   /**
    * 执行指令语句 (INSERT, UPDATE, DELETE 等)
    */
-  public execute(sql: string, params?: any[]): Promise<{ changes: number }> {
+  public execute(sql: string, params?: unknown[]): Promise<{ changes: number }> {
     return this.send<{ changes: number }>('EXEC', sql, params);
   }
 
@@ -112,6 +117,13 @@ class SQLiteClient {
    */
   public allocateWeapons(intensity: string, currentTime: number, scenarioId: string, scenarioEndTime: number): Promise<{ engagements_created: number }> {
     return this.send<{ engagements_created: number }>('AUTO_ALLOCATE_WEAPONS', '', [{ intensity, currentTime, scenarioId, scenarioEndTime }]);
+  }
+
+  /**
+   * 解算四大战术算力矩阵 (passMatrix, visibleMatrix, overheadMatrix, attackMatrix)
+   */
+  public generateMatrices(scenarioId: string = 'scen-001'): Promise<TacticalMatrices> {
+    return this.send<TacticalMatrices>('GENERATE_MATRICES', '', [scenarioId]);
   }
 }
 

@@ -2,7 +2,7 @@
  * 战术数据初始化脚本 (Seed Data for Sprint 3)
  */
 
-export const seedMockData = async (sqliteClient: any): Promise<void> => {
+export const seedMockData = async (sqliteClient: { execute: (sql: string, params?: unknown[]) => Promise<{ changes: number }> }): Promise<void> => {
   console.log('开始执行兵棋推演数据初始化...');
   
   // 1. 清空当前推演相关的表和数据 (不删除 scenarios 和用户保存的 tactical_plans)
@@ -27,7 +27,7 @@ export const seedMockData = async (sqliteClient: any): Promise<void> => {
     600000.0, 60
   ]);
 
-  // 3. 插入 15 条蓝方立体防御物理资产 (5 卫星 + 3 中继机 + 5 接收站 + 2 指挥中心)
+  // 3. 插入 12 条蓝方立体防御物理资产 (5 卫星 + 5 接收站 + 2 指挥中心)
   // LEO 卫星包含真实的 Starlink TLE 轨道根数
   await sqliteClient.execute(`
     INSERT INTO assets (id, side, layer, asset_class, func_type, usage_type, lat, lng, alt, tle_data, terrain_mask_angle, anti_jam_level, base_priority, is_detected_by_red)
@@ -49,17 +49,12 @@ export const seedMockData = async (sqliteClient: any): Promise<void> => {
      '1 56848U 23079P   26198.69793979  .00009979  00000-0  68991-3 0  9991\\n2 56848  43.0167 301.7123 0002712 107.8123 277.1234 15.04012308123470', 
      10.0, 50, 70, 1),
 
-    -- 3 架空中中继机/无人机 (Layer = 1)
-    ('relay-drone-01', 'BLUE', 1, 'DRONE', 'RELAY', 'MILITARY', 23.8, 121.8, 18.5, NULL, 5.0, 45, 60, 0),
-    ('relay-drone-02', 'BLUE', 1, 'DRONE', 'RELAY', 'MILITARY', 24.5, 122.2, 20.0, NULL, 5.0, 50, 65, 0),
-    ('relay-drone-03', 'BLUE', 1, 'DRONE', 'RELAY', 'MILITARY', 25.2, 121.3, 15.0, NULL, 5.0, 40, 55, 0),
-
-    -- 5 个雷达/地基接收站 (Layer = 0, 设定掩蔽角为 10 度)
-    ('station-hualien', 'BLUE', 0, 'STATION', 'COMM', 'CIVIL_COMMERCIAL', 24.0, 121.6, 0.05, NULL, 10.0, 50, 45, 1),
-    ('station-hengchun', 'BLUE', 0, 'STATION', 'COMM', 'MILITARY', 22.0, 120.7, 0.08, NULL, 10.0, 60, 50, 1),
-    ('station-keelung', 'BLUE', 0, 'STATION', 'COMM', 'CIVIL_COMMERCIAL', 25.1, 121.7, 0.03, NULL, 10.0, 45, 40, 1),
-    ('station-taitung', 'BLUE', 0, 'STATION', 'COMM', 'MILITARY', 22.8, 121.1, 0.12, NULL, 10.0, 70, 55, 1),
-    ('station-penghu', 'BLUE', 0, 'STATION', 'COMM', 'CIVIL_COMMERCIAL', 23.6, 119.6, 0.04, NULL, 10.0, 50, 65, 1),
+    -- 5 个雷达/地面接收站 (Layer = 1, 设定掩蔽角为 10 度)
+    ('station-hualien', 'BLUE', 1, 'STATION', 'COMM', 'CIVIL_COMMERCIAL', 24.0, 121.6, 0.05, NULL, 10.0, 50, 45, 1),
+    ('station-hengchun', 'BLUE', 1, 'STATION', 'COMM', 'MILITARY', 22.0, 120.7, 0.08, NULL, 10.0, 60, 50, 1),
+    ('station-keelung', 'BLUE', 1, 'STATION', 'COMM', 'CIVIL_COMMERCIAL', 25.1, 121.7, 0.03, NULL, 10.0, 45, 40, 1),
+    ('station-taitung', 'BLUE', 1, 'STATION', 'COMM', 'MILITARY', 22.8, 121.1, 0.12, NULL, 10.0, 70, 55, 1),
+    ('station-penghu', 'BLUE', 1, 'STATION', 'COMM', 'CIVIL_COMMERCIAL', 23.6, 119.6, 0.04, NULL, 10.0, 50, 65, 1),
 
     -- 2 个战术联合指挥控制中心 (Layer = 0)
     ('cmd-taipei', 'BLUE', 0, 'COMMAND_CENTER', 'OTHER', 'MILITARY', 25.0, 121.5, 0.04, NULL, 0.0, 80, 95, 1),
@@ -83,25 +78,17 @@ export const seedMockData = async (sqliteClient: any): Promise<void> => {
   `);
 
   // 6. 插入骨干链路 (静态网状连线)
-  // 为了让 3D 拓扑图呈现出完整的空天地三层网络，此处硬编码下层骨干链路
-  // (上层卫星到下层的动态链路会在 calculateWindows 轨道视算中自动生成)
+  // 为了让 3D 拓扑图呈现出完整的空天地三层网络，此处硬编码下层骨干链路 (Layer 1 -> Layer 0)
+  // (上层卫星 Layer 2 到地面接收站 Layer 1 的动态链路会在 calculateWindows 轨道视算中自动生成)
   await sqliteClient.execute(`
     INSERT INTO communication_windows (id, scenario_id, source_id, target_id, window_start, window_end, routing_converge_delay, link_status)
     VALUES 
-    -- 中继无人机 -> 雷达接收站
-    ('link-static-1', 'scen-001', 'relay-drone-01', 'station-hualien', 0, 9999999999, 30, 'TRANSMITTING'),
-    ('link-static-2', 'scen-001', 'relay-drone-01', 'station-keelung', 0, 9999999999, 30, 'TRANSMITTING'),
-    ('link-static-3', 'scen-001', 'relay-drone-02', 'station-hualien', 0, 9999999999, 30, 'TRANSMITTING'),
-    ('link-static-4', 'scen-001', 'relay-drone-02', 'station-taitung', 0, 9999999999, 30, 'TRANSMITTING'),
-    ('link-static-5', 'scen-001', 'relay-drone-03', 'station-hengchun', 0, 9999999999, 30, 'TRANSMITTING'),
-    ('link-static-6', 'scen-001', 'relay-drone-03', 'station-penghu', 0, 9999999999, 30, 'TRANSMITTING'),
-    
-    -- 雷达接收站 -> 战术指挥中心
-    ('link-static-7', 'scen-001', 'station-hualien', 'cmd-taipei', 0, 9999999999, 30, 'TRANSMITTING'),
-    ('link-static-8', 'scen-001', 'station-keelung', 'cmd-taipei', 0, 9999999999, 30, 'TRANSMITTING'),
-    ('link-static-9', 'scen-001', 'station-taitung', 'cmd-zuoying', 0, 9999999999, 30, 'TRANSMITTING'),
-    ('link-static-10', 'scen-001', 'station-hengchun', 'cmd-zuoying', 0, 9999999999, 30, 'TRANSMITTING'),
-    ('link-static-11', 'scen-001', 'station-penghu', 'cmd-zuoying', 0, 9999999999, 30, 'TRANSMITTING')
+    -- 地面接收站 (Layer 1) -> 战术指挥中心 (Layer 0)
+    ('link-static-1', 'scen-001', 'station-hualien', 'cmd-taipei', 0, 9999999999, 30, 'TRANSMITTING'),
+    ('link-static-2', 'scen-001', 'station-keelung', 'cmd-taipei', 0, 9999999999, 30, 'TRANSMITTING'),
+    ('link-static-3', 'scen-001', 'station-taitung', 'cmd-zuoying', 0, 9999999999, 30, 'TRANSMITTING'),
+    ('link-static-4', 'scen-001', 'station-hengchun', 'cmd-zuoying', 0, 9999999999, 30, 'TRANSMITTING'),
+    ('link-static-5', 'scen-001', 'station-penghu', 'cmd-zuoying', 0, 9999999999, 30, 'TRANSMITTING')
   `);
 
   console.log('兵棋推演基础资产与武器数据加载完成！');

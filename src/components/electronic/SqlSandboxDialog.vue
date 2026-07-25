@@ -45,10 +45,10 @@ const openDialog = () => {
 const runQuery = async () => {
   sqlError.value = '';
   try {
-    const results = await sqliteClient.query<any>(sqlQuery.value);
+    const results = await sqliteClient.query<Record<string, unknown>>(sqlQuery.value);
     sqlResults.value = results;
-  } catch (err: any) {
-    sqlError.value = err.message;
+  } catch (err: unknown) {
+    sqlError.value = err instanceof Error ? err.message : String(err);
     sqlResults.value = [];
   }
 };

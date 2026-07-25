@@ -7,19 +7,14 @@
 
         <!-- View Switcher Tabs -->
         <nav class="nav-tabs">
-          <button
-            class="tab-btn"
-            :class="{ active: currentView === 'SANDBOX' }"
-            @click="currentView = 'SANDBOX'"
-          >
+          <button class="tab-btn" :class="{ active: currentView === 'SANDBOX' }" @click="currentView = 'SANDBOX'">
             🖥️ 推演主沙盘
           </button>
-          <button
-            class="tab-btn"
-            :class="{ active: currentView === 'AAR' }"
-            @click="currentView = 'AAR'"
-          >
+          <button class="tab-btn" :class="{ active: currentView === 'AAR' }" @click="currentView = 'AAR'">
             📊 战后效能复盘
+          </button>
+          <button class="tab-btn" :class="{ active: currentView === 'MATRIX' }" @click="openMatrixView">
+            🧮 战术算法矩阵
           </button>
         </nav>
       </div>
@@ -30,28 +25,24 @@
           <span class="label-text">推演时钟:</span>
           <span class="digital-font time-value glow-text-cyan">{{
             formatTime(simTime)
-          }}</span>
+            }}</span>
         </div>
         <div class="header-right-item">
           <span class="label-text">红方预算消耗:</span>
-          <span class="digital-font budget-value glow-text-red"
-            >${{ formatNumber(budgetSpent) }} / ${{
-              formatNumber(maxBudget)
-            }}</span
-          >
+          <span class="digital-font budget-value glow-text-red">${{ formatNumber(budgetSpent) }} / ${{
+            formatNumber(maxBudget)
+          }}</span>
         </div>
         <div class="header-right-item">
           <span class="label-text">数据库状态:</span>
           <span class="db-status-container">
-            <span
-              :class="[
-                'status-dot',
-                isDbInitialized ? 'status-green' : 'status-red',
-              ]"
-            ></span>
+            <span :class="[
+              'status-dot',
+              isDbInitialized ? 'status-green' : 'status-red',
+            ]"></span>
             <span class="status-text digital-font">{{
               isDbInitialized ? "SQLite-Wasm (OPFS)" : "连接中..."
-            }}</span>
+              }}</span>
           </span>
         </div>
         <el-button size="small" type="primary" plain @click="openSqlSandbox">
@@ -71,52 +62,29 @@
           </div>
           <el-form label-position="left" label-width="90px" class="config-form">
             <el-form-item label="交战烈度:" class="form-item-intensity">
-              <el-select
-                v-model="conflictIntensity"
-                size="small"
-                class="form-input-full"
-              >
+              <el-select v-model="conflictIntensity" size="small" class="form-input-full">
                 <el-option label="低烈度 (软杀伤)" value="LOW" />
                 <el-option label="中烈度 (软/定向能)" value="MEDIUM" />
                 <el-option label="高烈度 (动能全开)" value="HIGH" />
               </el-select>
             </el-form-item>
             <el-form-item label="压制时长:" class="form-item-suppression">
-              <el-input-number
-                v-model="suppressionTime"
-                size="small"
-                :min="10"
-                :max="120"
-                class="form-input-full"
-              />
+              <el-input-number v-model="suppressionTime" size="small" :min="10" :max="120" class="form-input-full" />
             </el-form-item>
             <el-form-item label="代价上限:" class="form-item-budget">
-              <el-input
-                v-model="maxBudget"
-                size="small"
-                class="form-input-full"
-                placeholder="输入预算"
-              >
+              <el-input v-model="maxBudget" size="small" class="form-input-full" placeholder="输入预算">
                 <template #prefix>$</template>
               </el-input>
             </el-form-item>
             <el-form-item label="政治红线:" class="form-item-redline">
-              <el-select
-                v-model="politicalRedline"
-                size="small"
-                class="form-input-full"
-              >
+              <el-select v-model="politicalRedline" size="small" class="form-input-full">
                 <el-option label="严格/灰色地带 (禁打民用)" value="STRICT" />
                 <el-option label="局部冲突 (特定区域)" value="LOCAL" />
                 <el-option label="全面战争 (无限制)" value="TOTAL" />
               </el-select>
             </el-form-item>
             <el-form-item label="推演速率:" class="form-item-speed">
-              <el-select
-                v-model="playSpeedMs"
-                size="small"
-                class="form-input-full"
-              >
+              <el-select v-model="playSpeedMs" size="small" class="form-input-full">
                 <el-option label="快速 (1.0秒/步)" :value="1000" />
                 <el-option label="中速 (2.0秒/步)" :value="2000" />
                 <el-option label="慢速 (5.0秒/步)" :value="5000" />
@@ -124,42 +92,22 @@
             </el-form-item>
 
             <div class="action-btn-row">
-              <el-button
-                type="primary"
-                size="small"
-                class="flex-btn"
-                @click="loadMockScenario"
-              >
+              <el-button type="primary" size="small" class="flex-btn" @click="loadMockScenario">
                 ⚡ 初始化数据
               </el-button>
-              <el-button
-                type="success"
-                size="small"
-                class="flex-btn"
-                :disabled="!isScenarioLoaded"
-                @click="runOrbitCalculation"
-              >
+              <el-button type="success" size="small" class="flex-btn" :disabled="!isScenarioLoaded"
+                @click="runOrbitCalculation">
                 🛰️ 轨道视算
               </el-button>
             </div>
 
-            <el-button
-              :type="isPlaying ? 'warning' : 'danger'"
-              size="small"
-              class="submit-btn font-bold-btn"
-              :disabled="!isScenarioLoaded"
-              @click="togglePlay"
-            >
+            <el-button :type="isPlaying ? 'warning' : 'danger'" size="small" class="submit-btn font-bold-btn"
+              :disabled="!isScenarioLoaded" @click="togglePlay">
               {{ isPlaying ? "⏸ 暂停自动推演" : "▶ 开始交战推演" }}
             </el-button>
 
-            <el-button
-              type="success"
-              size="small"
-              class="submit-btn font-bold-btn"
-              :disabled="simMinutes < 50"
-              @click="savePlan"
-            >
+            <el-button type="success" size="small" class="submit-btn font-bold-btn" :disabled="simMinutes < 50"
+              @click="savePlan">
               💾 保存方案用于复盘
             </el-button>
           </el-form>
@@ -168,18 +116,10 @@
           <div class="time-slider-container">
             <div class="slider-header">
               <span class="label-text">推演步长演进:</span>
-              <span class="time-progress digital-font"
-                >{{ simMinutes }} / 50 min</span
-              >
+              <span class="time-progress digital-font">{{ simMinutes }} / 50 min</span>
             </div>
-            <el-slider
-              v-model="simMinutes"
-              :min="0"
-              :max="50"
-              :step="1"
-              :disabled="!isScenarioLoaded"
-              @change="onTimeStepChange"
-            />
+            <el-slider v-model="simMinutes" :min="0" :max="50" :step="1" :disabled="!isScenarioLoaded"
+              @change="onTimeStepChange" />
           </div>
         </div>
 
@@ -190,19 +130,12 @@
           </div>
           <div ref="timelineContainer" class="timeline-log-container">
             <el-timeline v-if="filteredLogs.length > 0">
-              <el-timeline-item
-                v-for="(log, index) in filteredLogs"
-                :key="index"
-                :type="
-                  log.level === 'error'
-                    ? 'danger'
-                    : log.level === 'warning'
-                      ? 'warning'
-                      : 'primary'
-                "
-                size="normal"
-                :timestamp="log.time"
-              >
+              <el-timeline-item v-for="(log, index) in filteredLogs" :key="index" :type="log.level === 'error'
+                  ? 'danger'
+                  : log.level === 'warning'
+                    ? 'warning'
+                    : 'primary'
+                " size="normal" :timestamp="log.time">
                 <div class="log-message">{{ log.message }}</div>
               </el-timeline-item>
             </el-timeline>
@@ -223,12 +156,7 @@
 
         <!-- Network Topology Canvas (3D Force Graph) -->
         <div class="canvas-container">
-          <Battlefield3D
-            v-if="isScenarioLoaded"
-            :nodes="assets"
-            :links="links"
-            @select-node="selectEntity"
-          />
+          <Battlefield3D v-if="isScenarioLoaded" :nodes="assets" :links="links" @select-node="selectEntity" />
           <div v-else class="empty-canvas-message">
             请在左侧点击“初始化数据”载入推演场景
           </div>
@@ -261,15 +189,13 @@
               <div class="inspector-header">
                 <span class="entity-name">{{
                   selectedEntity.name || selectedEntity.id
-                }}</span>
-                <span
-                  :class="[
-                    'side-tag',
-                    selectedType === 'WEAPON' || selectedEntity.side === 'RED'
-                      ? 'red-side'
-                      : 'blue-side',
-                  ]"
-                >
+                  }}</span>
+                <span :class="[
+                  'side-tag',
+                  selectedType === 'WEAPON' || selectedEntity.side === 'RED'
+                    ? 'red-side'
+                    : 'blue-side',
+                ]">
                   {{
                     selectedType === "WEAPON" || selectedEntity.side === "RED"
                       ? selectedType === "WEAPON"
@@ -286,63 +212,59 @@
                   <span class="label-dim">实体类型:</span>
                   <span class="digital-font">{{
                     selectedEntity.asset_class
-                  }}</span>
+                    }}</span>
                 </div>
                 <div>
                   <span class="label-dim">核心功能:</span>
                   <span class="digital-font">{{
                     selectedEntity.func_type
-                  }}</span>
+                    }}</span>
                 </div>
                 <div>
                   <span class="label-dim">所有权:</span>
                   <span class="digital-font">{{
                     selectedEntity.usage_type
-                  }}</span>
+                    }}</span>
                 </div>
                 <div>
                   <span class="label-dim">空间分层:</span>
                   <span class="digital-font">{{
                     getLayerLabel(selectedEntity.layer)
-                  }}</span>
+                    }}</span>
                 </div>
                 <div>
                   <span class="label-dim">抗干扰级:</span>
                   <span class="digital-font value-yellow">{{
                     selectedEntity.anti_jam_level
-                  }}</span>
+                    }}</span>
                 </div>
                 <div>
                   <span class="label-dim">目标价值:</span>
                   <span class="digital-font value-cyan">{{
                     selectedEntity.base_priority
-                  }}</span>
+                    }}</span>
                 </div>
                 <div class="grid-col-full">
                   <span class="label-dim">三维坐标:</span>
-                  <span class="digital-font"
-                    >L:{{
-                      selectedEntity.lat
-                        ? selectedEntity.lat.toFixed(2)
-                        : "计算中"
-                    }},{{
+                  <span class="digital-font">L:{{
+                    selectedEntity.lat
+                      ? selectedEntity.lat.toFixed(2)
+                      : "计算中"
+                  }},{{
                       selectedEntity.lng
                         ? selectedEntity.lng.toFixed(2)
                         : "计算中"
                     }}
-                    A:{{ selectedEntity.alt || 0 }}km</span
-                  >
+                    A:{{ selectedEntity.alt || 0 }}km</span>
                 </div>
                 <div class="grid-col-full">
                   <span class="label-dim">雷达发现:</span>
-                  <span
-                    :class="[
-                      'digital-font',
-                      selectedEntity.is_detected_by_red
-                        ? 'detected-red'
-                        : 'hidden-green',
-                    ]"
-                  >
+                  <span :class="[
+                    'digital-font',
+                    selectedEntity.is_detected_by_red
+                      ? 'detected-red'
+                      : 'hidden-green',
+                  ]">
                     {{
                       selectedEntity.is_detected_by_red ? "已被锁定" : "隐蔽中"
                     }}
@@ -356,13 +278,13 @@
                   <span class="label-dim">杀伤分类:</span>
                   <span class="digital-font">{{
                     selectedEntity.category
-                  }}</span>
+                    }}</span>
                 </div>
                 <div>
                   <span class="label-dim">毁伤机制:</span>
                   <span class="digital-font">{{
                     selectedEntity.kill_type
-                  }}</span>
+                    }}</span>
                 </div>
                 <div>
                   <span class="label-dim">打击范围:</span>
@@ -382,15 +304,13 @@
                 </div>
                 <div>
                   <span class="label-dim">单次耗费:</span>
-                  <span class="digital-font value-green"
-                    >${{ formatNumber(selectedEntity.action_cost) }}</span
-                  >
+                  <span class="digital-font value-green">${{ formatNumber(selectedEntity.action_cost) }}</span>
                 </div>
                 <div>
                   <span class="label-dim">升级红线:</span>
                   <span class="digital-font value-red">{{
                     selectedEntity.political_risk
-                  }}</span>
+                    }}</span>
                 </div>
               </div>
             </div>
@@ -403,7 +323,15 @@
     </div>
 
     <!-- AAR View -->
-    <AfterActionReview v-else />
+    <AfterActionReview v-else-if="currentView === 'AAR'" />
+
+    <!-- Tactical Matrix View -->
+    <TacticalMatrixView
+      v-else-if="currentView === 'MATRIX'"
+      :matrices="matrixData"
+      :loading="matrixLoading"
+      @refresh="loadMatrices"
+    />
 
     <SqlSandboxDialog ref="sqlSandboxRef" />
   </div>
@@ -417,6 +345,7 @@ import { seedMockData } from "@/db/seeder";
 import Battlefield3D from "@/components/electronic/Battlefield3D.vue";
 import WeaponAssignmentTable from "@/components/electronic/WeaponAssignmentTable.vue";
 import AfterActionReview from "@/components/electronic/AfterActionReview.vue";
+import TacticalMatrixView from "@/components/electronic/TacticalMatrixView.vue";
 import SqlSandboxDialog from "@/components/electronic/SqlSandboxDialog.vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 
@@ -424,8 +353,36 @@ import { ElMessage, ElMessageBox } from "element-plus";
 const isDbInitialized = ref(false);
 // 用于标记场景是否已加载
 const isScenarioLoaded = ref(false);
-// 用于标记当前视图是沙箱还是战后复盘
-const currentView = ref<"SANDBOX" | "AAR">("SANDBOX");
+// 用于标记当前视图是沙箱、战后复盘还是算法矩阵
+const currentView = ref<"SANDBOX" | "AAR" | "MATRIX">("SANDBOX");
+// 算法矩阵解算数据与状态
+const matrixData = ref<any>(null);
+const matrixLoading = ref(false);
+
+/**
+ * 触发 Web Worker 中的 generateMatrices 算力矩阵解算
+ */
+const loadMatrices = async () => {
+  matrixLoading.value = true;
+  try {
+    const res = await sqliteClient.generateMatrices("scen-001");
+    matrixData.value = res;
+  } catch (err: any) {
+    console.error("解算战术算法矩阵失败:", err);
+    ElMessage.error(`解算战术算法矩阵失败: ${err.message}`);
+  } finally {
+    matrixLoading.value = false;
+  }
+};
+
+/**
+ * 切换到战术算法矩阵视图
+ */
+const openMatrixView = () => {
+  currentView.value = "MATRIX";
+  loadMatrices();
+};
+
 // 用于标记沙箱是否已打开
 const sqlSandboxRef = ref<any>(null);
 
@@ -1369,6 +1326,7 @@ watch(currentView, () => {
 
 // Element Plus Dark Theme Overrides
 .left-sidebar {
+
   .el-select,
   .el-input,
   .el-input-number {
@@ -1397,6 +1355,7 @@ watch(currentView, () => {
   }
 
   .el-input-number {
+
     .el-input-number__increase,
     .el-input-number__decrease {
       background-color: #0b1836 !important;
