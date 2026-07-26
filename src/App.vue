@@ -156,7 +156,14 @@
 
         <!-- Network Topology Canvas (3D Force Graph) -->
         <div class="canvas-container">
-          <Battlefield3D v-if="isScenarioLoaded" :nodes="assets" :links="links" @select-node="selectEntity" />
+          <Battlefield3D 
+            v-if="isScenarioLoaded" 
+            :nodes="assets" 
+            :links="links" 
+            :highlightNodeIds="highlightNodeIds"
+            :highlightLinkIds="highlightLinkIds"
+            @select-node="selectEntity" 
+          />
           <div v-else class="empty-canvas-message">
             请在左侧点击“初始化数据”载入推演场景
           </div>
@@ -358,6 +365,36 @@ const currentView = ref<"SANDBOX" | "AAR" | "MATRIX">("SANDBOX");
 // 算法矩阵解算数据与状态
 const matrixData = ref<any>(null);
 const matrixLoading = ref(false);
+
+// 3D 全链路高亮节点与链路集合
+const highlightNodeIds = ref<string[]>([]);
+const highlightLinkIds = ref<string[]>([]);
+
+/**
+ * 触发全链路算力解算并在 3D 拓扑大屏中高亮链路
+ */
+const triggerFullChainHighlight = async (analysisData?: any) => {
+  try {
+    let data = analysisData;
+    if (!data) {
+      const res = await sqliteClient.generateMatrices("scen-001");
+      matrixData.value = res;
+      data = res.earliestFullChain;
+    }
+    if (data && data.pathNodes) {
+      highlightNodeIds.value = data.pathNodes;
+      highlightLinkIds.value = data.pathLinkIds || [];
+      currentView.value = "SANDBOX";
+      addLog(
+        `⚡ 蓝方最早全链路传输解算完成: T+${data.earliestFinishMin}m 实际完成，基准耗时 ${data.totalBaselineOverhead}s，受打压影响延时差额 +${data.delayDelta}s。已在 3D 拓扑图中炫光高亮该全链路！`,
+        "success"
+      );
+      ElMessage.success(`蓝方最早全链路传输解算完成！延时差额 +${data.delayDelta}s，已在 3D 拓扑大屏高亮显现。`);
+    }
+  } catch (err: any) {
+    console.error("高亮全链路失败:", err);
+  }
+};
 
 /**
  * 触发 Web Worker 中的 generateMatrices 算力矩阵解算
@@ -671,6 +708,8 @@ const loadMockScenario = async () => {
     await sqliteClient.calculateWindows("scen-001");
     addLog("初始轨道视算完成！星地链路已生成。", "success");
     simMinutes.value = 0;
+    highlightNodeIds.value = [];
+    highlightLinkIds.value = [];
     logs.value = [];
     await refreshData();
   } catch (error: any) {
@@ -869,10 +908,11 @@ const startSimulationLoop = () => {
   playIntervalId.value = setInterval(async () => {
     if (simMinutes.value >= suppressionTime.value) {
       addLog(
-        `已达到设定的 ${suppressionTime.value} 分钟压制时长，推演结束。`,
+        `已达到设定的 ${suppressionTime.value} 分钟压制时长，推演结束。正在自动解算并高亮蓝方最早全链路传输路径...`,
         "success",
       );
       stopSimulationLoop();
+      await triggerFullChainHighlight();
       return;
     }
     const nextVal = simMinutes.value + 1;

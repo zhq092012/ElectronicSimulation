@@ -268,6 +268,82 @@ export interface AttackMatrixItem {
 }
 
 /**
+ * 全链路传输过程中受到影响的武器打击归因项
+ */
+export interface FullChainAttribution {
+  /** 打击发生的精确时间戳 (Unix Timestamp, 秒) */
+  time: number;
+
+  /** 相对推演开始时间的分钟数 (T+X min) */
+  minute: number;
+
+  /** 红方武器唯一标识 ID */
+  weapon_id: string;
+
+  /** 红方武器名称 */
+  weapon_name: string;
+
+  /** 武器跨域杀伤分类 */
+  category: WeaponCategory;
+
+  /** 毁伤性质: 软杀伤/硬物理摧毁 */
+  kill_type: KillType;
+
+  /** 受到打击影响的蓝方目标节点 ID */
+  target_id: string;
+
+  /** 受到打击影响的蓝方目标节点名称 */
+  target_name: string;
+
+  /** 该武器打击动作对本次全链路传输造成的延时开销贡献 (秒) */
+  delay_impact: number;
+}
+
+/**
+ * 蓝方最早完成一次全链路传输分析结果结构体
+ */
+export interface EarliestFullChainAnalysis {
+  /** 蓝方最佳全链路信号发射发起时刻 (Unix Timestamp, 秒) */
+  optimalStartTime: number;
+
+  /** 蓝方最佳全链路信号发射发起时刻相对推演分钟数 (T+X min) */
+  optimalStartMin: number;
+
+  /** 受到对抗打压后，实际最早完成全链路接收的时刻 (Unix Timestamp, 秒) */
+  earliestFinishTime: number;
+
+  /** 实际最早完成全链路接收的相对推演分钟数 (T+Y min) */
+  earliestFinishMin: number;
+
+  /** 在无武器攻击的未受影响基准情况下，最早完成全链路接收的时刻 (Unix Timestamp, 秒) */
+  baselineFinishTime: number;
+
+  /** 未受影响基准情况下的相对推演分钟数 (T+Z min) */
+  baselineFinishMin: number;
+
+  /** 未受影响基准下的全链路总开销耗时 (秒) */
+  totalBaselineOverhead: number;
+
+  /** 受到对抗打压后的全链路实际总耗时 (秒) */
+  actualDelay: number;
+
+  /** 受武器影响而增加的时间差额：Delay_Delta = actualDelay - totalBaselineOverhead (秒) */
+  delayDelta: number;
+
+  /** 构成该最早全链路的完整节点路径序列 (例: [Sat_ID, Station_ID, Cmd_ID]) */
+  pathNodes: string[];
+
+  /** 构成该最早全链路的节点名称序列 */
+  pathNodeNames: string[];
+
+  /** 构成该最早全链路的单跳链路连线对 ID 标识列表 */
+  pathLinkIds: string[];
+
+  /** 在全链路传输过程中受红方武器打击影响的时间点与延时归因列表 */
+  attributions: FullChainAttribution[];
+}
+
+/**
  * 四大全域战术算法矩阵集合
  */
 export interface TacticalMatrices {
@@ -275,6 +351,9 @@ export interface TacticalMatrices {
   visibleMatrix: VisibleMatrixItem[];
   overheadMatrix: OverheadMatrixItem[];
   attackMatrix: AttackMatrixItem[];
+
+  /** 蓝方最早完成一次全链路传输分析解算结果 */
+  earliestFullChain?: EarliestFullChainAnalysis;
 }
 
 /**

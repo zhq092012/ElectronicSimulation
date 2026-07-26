@@ -16,6 +16,10 @@ const THREE_OBJ = THREE as any;
 const props = defineProps<{
   nodes: GraphNode[];
   links: GraphLink[];
+  /** 高亮展示的节点 ID 集合 (例: 全链路路径 [Sat_ID, Station_ID, Cmd_ID]) */
+  highlightNodeIds?: string[];
+  /** 高亮展示的连线 ID 集合 */
+  highlightLinkIds?: string[];
 }>();
 
 const emit = defineEmits<{
@@ -26,6 +30,71 @@ const container = ref<HTMLDivElement | null>(null);
 let Graph: ForceGraph3DInstance | null = null;
 let resizeObserver: ResizeObserver | null = null;
 
+/**
+ * 精确判定连线是否属于全链路中相邻节点构成的传输通路
+ */
+const isLinkHighlighted = (link: any): boolean => {
+  if (!props.highlightNodeIds || props.highlightNodeIds.length < 2) return false;
+  const sId = typeof link.source === 'object' ? link.source.id : link.source;
+  const tId = typeof link.target === 'object' ? link.target.id : link.target;
+  if (!sId || !tId) return false;
+
+  const nodes = props.highlightNodeIds;
+  for (let i = 0; i < nodes.length - 1; i++) {
+    if ((nodes[i] === sId && nodes[i + 1] === tId) || (nodes[i] === tId && nodes[i + 1] === sId)) {
+      return true;
+    }
+  }
+
+  if (props.highlightLinkIds && props.highlightLinkIds.length > 0) {
+    return props.highlightLinkIds.some(id => id === `${sId}::${tId}` || id === `${tId}::${sId}` || id === link.id);
+  }
+  return false;
+};
+
+/**
+ * 构造与处理 3D 拓扑渲染的连线数据集 (支持全链路补全与无关/交战红线隐藏)
+ */
+const getProcessedLinks = () => {
+  const isHighlightMode = props.highlightNodeIds && props.highlightNodeIds.length >= 2;
+  let baseLinks = JSON.parse(JSON.stringify(props.links || []));
+
+  if (isHighlightMode) {
+    // 1. 自动补全全链路路径中可能因推演时刻错开而未查出的单跳连线 (例如 Sat -> Station)
+    const nodes = props.highlightNodeIds!;
+    for (let i = 0; i < nodes.length - 1; i++) {
+      const sId = nodes[i];
+      const tId = nodes[i + 1];
+
+      const exists = baseLinks.some((l: any) => {
+        const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+        const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+        return (sourceId === sId && targetId === tId) || (sourceId === tId && targetId === sId);
+      });
+
+      if (!exists) {
+        baseLinks.push({
+          id: `fullchain-link-${sId}::${tId}`,
+          source: sId,
+          target: tId,
+          link_status: 'TRANSMITTING',
+          window_start: 0,
+          window_end: 9999999999,
+          routing_converge_delay: 30
+        });
+      }
+    }
+
+    // 2. 计时结束全链路展示时，隐藏所有武器打击交战红线 (ENGAGEMENT) 以及无关受干扰线路
+    baseLinks = baseLinks.filter((l: any) => {
+      if (l.link_status === 'ENGAGEMENT') return false;
+      return isLinkHighlighted(l);
+    });
+  }
+
+  return baseLinks;
+};
+
 onMounted(() => {
   if (!container.value) return;
 
@@ -35,13 +104,15 @@ onMounted(() => {
 
   Graph = new ForceGraph3D(container.value, { controlType: 'orbit' })
     .graphData({
-      nodes: JSON.parse(JSON.stringify(props.nodes)),
-      links: JSON.parse(JSON.stringify(props.links))
+      nodes: JSON.parse(JSON.stringify(props.nodes || [])),
+      links: getProcessedLinks()
     })
     .backgroundColor('rgba(8, 12, 22, 0.0)')
     .showNavInfo(false)
+    .enableNodeDrag(false) // 禁用节点拖拽，防止拖拽控件在取消/释放时访问未定义的节点对象抛错
     .nodeLabel(() => '') // We use SpriteText instead of native tooltip for always-on labels
     .linkColor((link: any) => {
+      if (isLinkHighlighted(link)) return 'rgba(255, 204, 0, 0.95)'; // 亮金流光色
       const l = link as GraphLink;
       if (l.link_status === 'TRANSMITTING') return 'rgba(0, 102, 255, 0.6)';
       if (l.link_status === 'JAMMED') return 'rgba(234, 179, 8, 0.6)';
@@ -50,6 +121,7 @@ onMounted(() => {
       return 'rgba(107, 114, 128, 0.25)';
     })
     .linkWidth((link: any) => {
+      if (isLinkHighlighted(link)) return 2.0; // 统一适中线条宽度，不再额外加粗
       const l = link as GraphLink;
       if (l.link_status === 'TRANSMITTING') return 2.0;
       if (l.link_status === 'JAMMED') return 1.5;
@@ -57,6 +129,13 @@ onMounted(() => {
       return 0.5;
     })
     .linkMaterial((link: any) => {
+      if (isLinkHighlighted(link)) {
+        return new THREE_OBJ.LineBasicMaterial({
+          color: 0xffea00,
+          transparent: true,
+          opacity: 0.9
+        });
+      }
       const l = link as GraphLink;
       if (l.link_status === 'JAMMED') {
         return new THREE_OBJ.LineDashedMaterial({
@@ -82,6 +161,7 @@ onMounted(() => {
       return false; // Use default material
     })
     .linkDirectionalParticles((link: any) => {
+      if (isLinkHighlighted(link)) return 5;
       const l = link as GraphLink;
       if (l.link_status === 'TRANSMITTING') return 3;
       if (l.link_status === 'JAMMED') return 1;
@@ -89,14 +169,19 @@ onMounted(() => {
       return 0;
     })
     .linkDirectionalParticleColor((link: any) => {
+      if (isLinkHighlighted(link)) return '#ffffff'; // 高亮白色炫光核心粒子
       const l = link as GraphLink;
       if (l.link_status === 'TRANSMITTING') return '#00e1ff';
       if (l.link_status === 'JAMMED') return '#eab308';
       if (l.link_status === 'ENGAGEMENT') return '#ff2a5f';
       return '#4b5563';
     })
-    .linkDirectionalParticleWidth(2.5)
+    .linkDirectionalParticleWidth((link: any) => {
+      if (isLinkHighlighted(link)) return 2.5;
+      return 2.5;
+    })
     .linkDirectionalParticleSpeed((link: any) => {
+      if (isLinkHighlighted(link)) return 0.018;
       const l = link as GraphLink;
       if (l.link_status === 'JAMMED') return 0.003;
       if (l.link_status === 'ENGAGEMENT') return 0.016;
@@ -154,37 +239,40 @@ onMounted(() => {
   Graph!.nodeThreeObject((node: any) => {
     const n = node as GraphNode;
     const isDestroyed = n.anti_jam_level === 0 && n.base_priority === 0;
+    const isHighlighted = props.highlightNodeIds && props.highlightNodeIds.includes(n.id);
 
     let color = n.side === 'RED' ? '#ff2a5f' : '#00e1ff';
-    if (isDestroyed) {
+    if (isHighlighted) {
+      color = '#ffcc00'; // 金黄发光光色
+    } else if (isDestroyed) {
       color = '#374151'; // Destroyed goes dark
     }
 
     const material = new THREE_OBJ.MeshLambertMaterial({
       color,
       transparent: true,
-      opacity: 0.85,
-      emissive: isDestroyed ? 0xff0000 : 0x000000,
-      emissiveIntensity: isDestroyed ? 0.6 : 0
+      opacity: 0.9,
+      emissive: isHighlighted ? 0xffaa00 : isDestroyed ? 0xff0000 : 0x000000,
+      emissiveIntensity: isHighlighted ? 0.8 : isDestroyed ? 0.6 : 0
     });
 
     const group = new THREE_OBJ.Group();
     let mesh;
 
     if (n.asset_class === 'SATELLITE') {
-      const body = new THREE_OBJ.Mesh(new THREE_OBJ.SphereGeometry(6, 12, 12), material);
-      const wingMat = new THREE_OBJ.MeshLambertMaterial({ color: isDestroyed ? '#1f2937' : '#2d3748', transparent: true, opacity: 0.65 });
-      const leftWing = new THREE_OBJ.Mesh(new THREE_OBJ.BoxGeometry(18, 3, 0.5), wingMat);
+      const body = new THREE_OBJ.Mesh(new THREE_OBJ.SphereGeometry(isHighlighted ? 8 : 6, 12, 12), material);
+      const wingMat = new THREE_OBJ.MeshLambertMaterial({ color: isHighlighted ? '#ffe066' : isDestroyed ? '#1f2937' : '#2d3748', transparent: true, opacity: 0.85 });
+      const leftWing = new THREE_OBJ.Mesh(new THREE_OBJ.BoxGeometry(20, 3, 0.5), wingMat);
       body.add(leftWing);
       mesh = body;
     } else if (n.asset_class === 'DRONE') {
-      mesh = new THREE_OBJ.Mesh(new THREE_OBJ.ConeGeometry(5, 12, 4), material);
+      mesh = new THREE_OBJ.Mesh(new THREE_OBJ.ConeGeometry(isHighlighted ? 7 : 5, 14, 4), material);
       mesh.rotation.x = Math.PI / 2;
     } else if (n.asset_class === 'STATION') {
-      mesh = new THREE_OBJ.Mesh(new THREE_OBJ.CylinderGeometry(5, 5, 8, 8), material);
+      mesh = new THREE_OBJ.Mesh(new THREE_OBJ.CylinderGeometry(isHighlighted ? 7 : 5, isHighlighted ? 7 : 5, 10, 8), material);
       mesh.rotation.x = Math.PI / 2;
     } else if (n.asset_class === 'COMMAND_CENTER') {
-      mesh = new THREE_OBJ.Mesh(new THREE_OBJ.BoxGeometry(8, 8, 8), material);
+      mesh = new THREE_OBJ.Mesh(new THREE_OBJ.BoxGeometry(isHighlighted ? 11 : 8, isHighlighted ? 11 : 8, isHighlighted ? 11 : 8), material);
     } else if (n.id && n.id.startsWith('weapon-')) {
       mesh = new THREE_OBJ.Mesh(new THREE_OBJ.ConeGeometry(6, 14, 4), material);
       mesh.rotation.x = -Math.PI / 2;
@@ -198,11 +286,12 @@ onMounted(() => {
     const usageStr = n.usage_type === 'MILITARY' ? '(军用)' : n.usage_type === 'CIVIL_COMMERCIAL' ? '(民用)' : '';
     const classStr = n.asset_class ? `[${n.asset_class}]` : '';
     const nameStr = n.name || n.id || '';
+    const highlightPrefix = isHighlighted ? '⚡[全链路关键节点] ' : '';
 
-    const label = new SpriteText(`${nameStr}\n${classStr} ${usageStr}`);
-    label.color = n.side === 'RED' ? '#ff87a3' : '#a5f3fc';
-    label.textHeight = 3.5;
-    (label as any).position.set(0, -12, 0); // Display below the mesh
+    const label = new SpriteText(`${highlightPrefix}${nameStr}\n${classStr} ${usageStr}`);
+    label.color = isHighlighted ? '#ffe066' : n.side === 'RED' ? '#ff87a3' : '#a5f3fc';
+    label.textHeight = isHighlighted ? 4.5 : 3.5;
+    (label as any).position.set(0, -14, 0); // Display below the mesh
     group.add(label);
 
     return group;
@@ -281,12 +370,12 @@ onMounted(() => {
   resizeObserver.observe(container.value);
 });
 
-// Watch for data changes
-watch(() => [props.nodes, props.links], ([newNodes, newLinks]) => {
+// Watch for data and highlight changes
+watch(() => [props.nodes, props.links, props.highlightNodeIds, props.highlightLinkIds], () => {
   if (Graph) {
-    const clonedNodes = JSON.parse(JSON.stringify(newNodes));
-    const clonedLinks = JSON.parse(JSON.stringify(newLinks));
-    Graph.graphData({ nodes: clonedNodes, links: clonedLinks });
+    const clonedNodes = JSON.parse(JSON.stringify(props.nodes || []));
+    const processedLinks = getProcessedLinks();
+    Graph.graphData({ nodes: clonedNodes, links: processedLinks });
   }
 }, { deep: true });
 

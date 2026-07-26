@@ -14,6 +14,10 @@ import type {
   AttackMatrixItem,
   TacticalMatrices,
   LinkStatus,
+  EarliestFullChainAnalysis,
+  FullChainAttribution,
+  WeaponCategory,
+  KillType,
 } from "../types/electronic";
 
 /**
@@ -926,11 +930,165 @@ function generateMatrices(scenarioId: string): TacticalMatrices {
     });
   });
 
+  // 6. 解算 earliestFullChain (蓝方最早完成一次全链路传输分析及武器影响归因)
+  let earliestFullChain: EarliestFullChainAnalysis | undefined = undefined;
+  try {
+    const satToStationLinks = overheadMatrix.filter(item => item.link_type === 'SAT_TO_STATION');
+    const stationToCmdLinks = overheadMatrix.filter(item => item.link_type === 'STATION_TO_CMD');
+
+    // 获取所有武器名称字典供归因匹配
+    const weaponMap = new Map<string, Weapon>();
+    weapons.forEach(w => weaponMap.set(w.id, w));
+
+    // 获取所有资产 ID 字典
+    const assetNameMap = new Map<string, string>();
+    activeDb.exec({
+      sql: `SELECT id FROM assets`,
+      rowMode: 'object',
+      callback: (r: any) => { assetNameMap.set(r.id, r.id); }
+    });
+
+    let bestCombination: {
+      optimalStartTime: number;
+      earliestFinishTime: number;
+      totalBaselineOverhead: number;
+      actualDelay: number;
+      pathNodes: string[];
+      pathNodeNames: string[];
+      pathLinkIds: string[];
+      satLink: OverheadMatrixItem;
+      stationLink: OverheadMatrixItem;
+    } | null = null;
+
+    let minFinishTime = Infinity;
+
+    // 寻找在受到干扰/打压后，实际最早完成全链路传输的最佳链路组合与发射时刻 t0
+    satToStationLinks.forEach(satLink => {
+      stationToCmdLinks.forEach(stationLink => {
+        // 匹配地面接收站节点衔接: Sat -> Station 且 Station -> Cmd
+        if (satLink.target_id === stationLink.source_id) {
+          const baseline1 = satLink.trans_delay + satLink.proc_delay;
+          const baseline2 = stationLink.trans_delay + stationLink.proc_delay;
+          const totalBaselineOverhead = baseline1 + baseline2;
+
+          for (let i = 0; i < satLink.ticks.length; i++) {
+            const tick1 = satLink.ticks[i];
+            const t0 = tick1.time;
+            const delay1 = tick1.total_overhead;
+            const t1 = t0 + delay1;
+
+            // 匹配第二跳在 t1 时刻处的时延开销
+            const tick2Index = Math.min(
+              stationLink.ticks.length - 1,
+              Math.max(0, Math.floor((t1 - start_time) / time_step_seconds))
+            );
+            const tick2 = stationLink.ticks[tick2Index];
+            const delay2 = tick2 ? tick2.total_overhead : baseline2;
+            const actualDelay = delay1 + delay2;
+            const finishTime = t0 + actualDelay;
+
+            if (finishTime < minFinishTime) {
+              minFinishTime = finishTime;
+              const satName = assetNameMap.get(satLink.source_id) || satLink.source_id;
+              const stationName = assetNameMap.get(satLink.target_id) || satLink.target_id;
+              const cmdName = assetNameMap.get(stationLink.target_id) || stationLink.target_id;
+
+              bestCombination = {
+                optimalStartTime: t0,
+                earliestFinishTime: finishTime,
+                totalBaselineOverhead,
+                actualDelay,
+                pathNodes: [satLink.source_id, satLink.target_id, stationLink.target_id],
+                pathNodeNames: [satName, stationName, cmdName],
+                pathLinkIds: [
+                  `${satLink.source_id}::${satLink.target_id}`,
+                  `${stationLink.source_id}::${stationLink.target_id}`
+                ],
+                satLink,
+                stationLink
+              };
+            }
+          }
+        }
+      });
+    });
+
+    if (bestCombination) {
+      const {
+        optimalStartTime,
+        earliestFinishTime,
+        totalBaselineOverhead,
+        actualDelay,
+        pathNodes,
+        pathNodeNames,
+        pathLinkIds
+      } = bestCombination;
+
+      const delayDelta = actualDelay - totalBaselineOverhead;
+      const attributions: FullChainAttribution[] = [];
+
+      // 从 engagements 中检索落在该全链路传输时间窗口内的成功武器打击记录
+      activeDb.exec({
+        sql: `
+          SELECT e.action_time, e.weapon_id, w.name as weapon_name, w.category, w.kill_type, cw.target_id, a.id as target_name
+          FROM engagements e
+          JOIN weapons w ON e.weapon_id = w.id
+          JOIN communication_windows cw ON e.target_window_id = cw.id
+          JOIN assets a ON cw.target_id = a.id OR cw.source_id = a.id
+          WHERE e.is_successful = 1
+            AND e.action_time >= ? AND e.action_time <= ?
+            AND (a.id = ? OR a.id = ?)
+        `,
+        bind: [optimalStartTime, earliestFinishTime, pathNodes[0], pathNodes[1]],
+        rowMode: 'object',
+        callback: (r: any) => {
+          const impact = r.kill_type === 'HARD' ? 300 : 45;
+          const targetName = assetNameMap.get(r.target_id) || r.target_id;
+          attributions.push({
+            time: r.action_time,
+            minute: Math.floor((r.action_time - start_time) / 60),
+            weapon_id: r.weapon_id,
+            weapon_name: r.weapon_name,
+            category: r.category as WeaponCategory,
+            kill_type: r.kill_type as KillType,
+            target_id: r.target_id,
+            target_name: targetName,
+            delay_impact: impact
+          });
+        }
+      });
+
+      const optimalStartMin = Math.floor((optimalStartTime - start_time) / 60);
+      const earliestFinishMin = Math.floor((earliestFinishTime - start_time) / 60);
+      const baselineFinishTime = optimalStartTime + totalBaselineOverhead;
+      const baselineFinishMin = Math.floor((baselineFinishTime - start_time) / 60);
+
+      earliestFullChain = {
+        optimalStartTime,
+        optimalStartMin,
+        earliestFinishTime,
+        earliestFinishMin,
+        baselineFinishTime,
+        baselineFinishMin,
+        totalBaselineOverhead,
+        actualDelay,
+        delayDelta,
+        pathNodes,
+        pathNodeNames,
+        pathLinkIds,
+        attributions
+      };
+    }
+  } catch (err) {
+    console.error('Error calculating earliestFullChain:', err);
+  }
+
   return {
     passMatrix,
     visibleMatrix,
     overheadMatrix,
-    attackMatrix
+    attackMatrix,
+    earliestFullChain
   };
 }
 

@@ -115,6 +115,14 @@
           <span>🎯 4. 武器打击矩阵</span>
           <span class="badge-count">{{ filteredAttackMatrix.length }}</span>
         </button>
+        <button 
+          class="matrix-tab-btn highlight-gold-btn" 
+          :class="{ active: activeSubTab === 'FULLCHAIN' }" 
+          @click="activeSubTab = 'FULLCHAIN'"
+        >
+          <span>⚡ 5. 最早全链路传输解算</span>
+          <span v-if="matrices && matrices.earliestFullChain" class="badge-count text-gold">T+{{ matrices.earliestFullChain.earliestFinishMin }}m</span>
+        </button>
       </div>
     </div>
 
@@ -367,13 +375,145 @@
           </table>
         </div>
       </div>
+
+      <!-- 5. Full Chain Transfer Tab -->
+      <div v-if="activeSubTab === 'FULLCHAIN'" class="tab-pane tech-panel">
+        <div class="pane-header">
+          <div class="pane-title flex-title">
+            <span>⚡ 蓝方最早完成一次全链路传输分析与武器影响归因</span>
+            <button 
+              v-if="matrices && matrices.earliestFullChain" 
+              class="tech-btn btn-gold" 
+              @click="handleHighlightFullChain"
+            >
+              ✨ 在 3D 拓扑大屏中高亮显示此链路
+            </button>
+          </div>
+          <div class="pane-desc">解算蓝方全链路 (Layer 2 卫星 ➔ Layer 1 地面站 ➔ Layer 0 指挥中心) 在软硬武器打击压制下的实际最早完成时刻与时间差归因</div>
+        </div>
+
+        <div v-if="matrices && matrices.earliestFullChain" class="fullchain-analysis-container">
+          <!-- KPI Summary Cards for Full Chain -->
+          <div class="kpi-cards-row fullchain-cards">
+            <div class="kpi-card tech-panel bg-gradient-cyan">
+              <div class="card-icon">🚀</div>
+              <div class="card-content">
+                <div class="card-label">最佳发射发起时刻</div>
+                <div class="card-value-group">
+                  <span class="digital-font card-value text-cyan">T+{{ matrices.earliestFullChain.optimalStartMin }}m</span>
+                  <span class="card-sub-val">({{ formatTime(matrices.earliestFullChain.optimalStartTime) }})</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="kpi-card tech-panel bg-gradient-blue">
+              <div class="card-icon">🏁</div>
+              <div class="card-content">
+                <div class="card-label">实际最早完成时刻</div>
+                <div class="card-value-group">
+                  <span class="digital-font card-value text-cyan">T+{{ matrices.earliestFullChain.earliestFinishMin }}m</span>
+                  <span class="card-sub-val">({{ formatTime(matrices.earliestFullChain.earliestFinishTime) }})</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="kpi-card tech-panel bg-gradient-yellow">
+              <div class="card-icon">📏</div>
+              <div class="card-content">
+                <div class="card-label">未受影响基准耗时</div>
+                <div class="card-value-group">
+                  <span class="digital-font card-value text-yellow">{{ matrices.earliestFullChain.totalBaselineOverhead }}</span>
+                  <span class="card-unit">秒</span>
+                  <span class="card-sub-val">(理论零干扰全链路耗时)</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="kpi-card tech-panel bg-gradient-red">
+              <div class="card-icon">⚠️</div>
+              <div class="card-content">
+                <div class="card-label">受影响增加时间差 (Delay Delta)</div>
+                <div class="card-value-group">
+                  <span class="digital-font card-value text-red">+{{ matrices.earliestFullChain.delayDelta }}</span>
+                  <span class="card-unit">秒</span>
+                  <span class="card-sub-val">(实际总耗时 {{ matrices.earliestFullChain.actualDelay }}s)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Path Topology Flow Display -->
+          <div class="path-flow-panel tech-panel">
+            <div class="panel-subtitle">节点拓扑传输路径</div>
+            <div class="path-steps">
+              <div class="path-step-item">
+                <span class="step-badge step-sat">Layer 2 天基卫星</span>
+                <span class="step-name">{{ matrices.earliestFullChain.pathNodeNames[0] }}</span>
+              </div>
+              <div class="path-arrow font-large glow-text-cyan">➔ (单跳传输) ➔</div>
+              <div class="path-step-item">
+                <span class="step-badge step-station">Layer 1 地面接收站</span>
+                <span class="step-name">{{ matrices.earliestFullChain.pathNodeNames[1] }}</span>
+              </div>
+              <div class="path-arrow font-large glow-text-cyan">➔ (骨干通信) ➔</div>
+              <div class="path-step-item">
+                <span class="step-badge step-cmd">Layer 0 联合指挥中心</span>
+                <span class="step-name">{{ matrices.earliestFullChain.pathNodeNames[2] }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Attribution Table: Which weapons affected which time points -->
+          <div class="attribution-table-panel tech-panel">
+            <div class="panel-subtitle">武器影响时间点与延时归因明细表</div>
+            <table class="tech-table">
+              <thead>
+                <tr>
+                  <th>打击发生时间点</th>
+                  <th>红方武器名称 / ID</th>
+                  <th>武器分类 / 毁伤性质</th>
+                  <th>受影响蓝方目标</th>
+                  <th>施加延时影响 (Delay Contribution)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(item, idx) in matrices.earliestFullChain.attributions" :key="idx">
+                  <td class="digital-font text-cyan">
+                    T+{{ item.minute }}m ({{ formatTime(item.time) }})
+                  </td>
+                  <td>
+                    <span class="bold-text text-red">{{ item.weapon_name || item.weapon_id }}</span>
+                  </td>
+                  <td>
+                    <span class="tag-pill" :class="item.kill_type === 'HARD' ? 'tag-hard' : 'tag-soft'">
+                      {{ item.category }} ({{ item.kill_type === 'HARD' ? '硬摧毁' : '软干扰' }})
+                    </span>
+                  </td>
+                  <td>
+                    <span class="node-badge node-blue">{{ item.target_name || item.target_id }}</span>
+                  </td>
+                  <td class="digital-font font-large text-red bold-text">
+                    +{{ item.delay_impact }} 秒
+                  </td>
+                </tr>
+                <tr v-if="!matrices.earliestFullChain.attributions || matrices.earliestFullChain.attributions.length === 0">
+                  <td colspan="5" class="text-center text-dim">在该传输时间窗内未遭受红方成功开火打压</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div v-else class="text-dim text-center padding-large">
+          暂未解算出全链路传输数据，请点击“重新解算矩阵”。
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import type { TacticalMatrices } from '../../types/electronic';
+import type { TacticalMatrices, EarliestFullChainAnalysis } from '../../types/electronic';
 
 const props = defineProps<{
   matrices: TacticalMatrices | null;
@@ -382,13 +522,23 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'refresh'): void;
+  (e: 'highlight-fullchain', data: EarliestFullChainAnalysis): void;
 }>();
 
-const activeSubTab = ref<'PASS' | 'VISIBILITY' | 'OVERHEAD' | 'ATTACK'>('PASS');
+const activeSubTab = ref<'PASS' | 'VISIBILITY' | 'OVERHEAD' | 'ATTACK' | 'FULLCHAIN'>('PASS');
 const searchQuery = ref('');
 
 const handleRefresh = () => {
   emit('refresh');
+};
+
+/**
+ * 触发高亮全链路事件
+ */
+const handleHighlightFullChain = () => {
+  if (props.matrices && props.matrices.earliestFullChain) {
+    emit('highlight-fullchain', props.matrices.earliestFullChain);
+  }
 };
 
 const isEmpty = computed(() => {
@@ -871,7 +1021,7 @@ const getWeaponIcon = (category: string) => {
 }
 
 .tech-table td {
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   color: #cbd5e1;
   vertical-align: middle;
@@ -1004,5 +1154,137 @@ const getWeaponIcon = (category: string) => {
 .glow-text-cyan {
   color: #00f0ff;
   text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+}
+
+/* Full Chain Styles */
+.highlight-gold-btn {
+  border-color: rgba(255, 204, 0, 0.4) !important;
+}
+
+.highlight-gold-btn.active {
+  background: linear-gradient(135deg, rgba(255, 204, 0, 0.25), rgba(255, 150, 0, 0.3)) !important;
+  color: #fffbcf !important;
+  border-color: #ffcc00 !important;
+  box-shadow: 0 0 12px rgba(255, 204, 0, 0.4) !important;
+}
+
+.text-gold {
+  color: #ffcc00 !important;
+}
+
+.btn-gold {
+  background: linear-gradient(135deg, rgba(255, 204, 0, 0.25), rgba(255, 128, 0, 0.3));
+  border: 1px solid #ffcc00;
+  color: #fffbcf;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-gold:hover {
+  background: linear-gradient(135deg, rgba(255, 204, 0, 0.4), rgba(255, 128, 0, 0.5));
+  box-shadow: 0 0 12px rgba(255, 204, 0, 0.6);
+  transform: translateY(-1px);
+}
+
+.flex-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.fullchain-analysis-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.fullchain-cards .kpi-card {
+  flex: 1;
+}
+
+.path-flow-panel {
+  padding: 16px;
+  background: rgba(8, 14, 28, 0.6);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel-subtitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffcc00;
+  border-left: 3px solid #ffcc00;
+  padding-left: 8px;
+}
+
+.path-steps {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background: rgba(13, 22, 40, 0.8);
+  padding: 16px;
+  border-radius: 6px;
+  border: 1px dashed rgba(255, 204, 0, 0.3);
+}
+
+.path-step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.step-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.step-sat {
+  background: rgba(0, 225, 255, 0.15);
+  color: #00e1ff;
+  border: 1px solid rgba(0, 225, 255, 0.4);
+}
+
+.step-station {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.step-cmd {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.step-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.path-arrow {
+  letter-spacing: 2px;
+}
+
+.attribution-table-panel {
+  padding: 16px;
+  background: rgba(8, 14, 28, 0.6);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 </style>
