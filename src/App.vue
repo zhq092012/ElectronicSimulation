@@ -365,6 +365,10 @@ const matrixLoading = ref(false);
 const loadMatrices = async () => {
   matrixLoading.value = true;
   try {
+    // 场景未加载时自动执行场景数据初始化，防止场景 scenarios 表为空导致 Worker 报错 Scenario scen-001 not found
+    if (!isScenarioLoaded.value) {
+      await loadMockScenario();
+    }
     const res = await sqliteClient.generateMatrices("scen-001");
     matrixData.value = res;
   } catch (err: any) {
@@ -426,6 +430,11 @@ onMounted(async () => {
     isDbInitialized.value = true;
     addLog("SQLite Wasm (OPFS) 线程初始化成功！", "success");
     await refreshData();
+    // 校验场景数据是否存在，若未加载则自动初始化默认模拟场景 scen-001，避免首次进入时表为空
+    if (!isScenarioLoaded.value) {
+      addLog("未检测到默认场景数据，正在自动初始化推演场景...", "info");
+      await loadMockScenario();
+    }
   } catch (err: any) {
     addLog(`数据库加载失败: ${err.message}`, "error");
   }
