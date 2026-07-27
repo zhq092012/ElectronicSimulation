@@ -405,9 +405,10 @@ function autoAllocateWeapons(
 
         // 解算最终有效干信比 (J/S Ratio)
         // 假定干扰开机基准功率为 3000W，蓝方通信基准功率为 0.05W,并考虑通信链路基准距离的自由空间损耗以计算接收端功率
-        const P_jam = 3000;
-        const d_sig = 600.0;
-        const P_sig_recv = 0.05 / (4 * Math.PI * Math.pow(d_sig, 2));
+        const P_jam = 3000;// 干扰开机基准功率
+        const d_sig = 600.0;// 通信链路基准距离
+        const P_sig_recv = 0.05 / (4 * Math.PI * Math.pow(d_sig, 2));// 通信链路基准距离的自由空间损耗
+       // 计算最终有效干信比
         const js =
           10 *
           Math.log10(
