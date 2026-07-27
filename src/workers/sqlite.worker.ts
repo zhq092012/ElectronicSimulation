@@ -247,7 +247,7 @@ function autoAllocateWeapons(
   });
   // 根据当前推演烈度过滤红方可用武器
   // category:跨域杀伤机理分类 w.category:跨域杀伤机理分类,'EW':'电子战','CYBER':'网络战','KINETIC':'物理战','DEW':'定向能武器'
-  // kill_type:杀伤机理 SOFT:'软杀伤'，'HARD':'硬杀伤' 
+  // kill_type:杀伤机理 SOFT:'软杀伤'，'HARD':'硬杀伤'
   const allowedWeapons = weapons.filter((w) => {
     if (intensity === "LOW") {
       return (
@@ -379,26 +379,32 @@ function autoAllocateWeapons(
           });
         }
 
-        // 解算 CEMA 多域战物理衰减因子
+        // ============================== 解算 CEMA 多域战物理衰减因子============================
+        // 模拟了电磁波（或某种信号）在传播过程中的各种**能量衰减（Loss/Attenuation）**因素。最终的总衰减通常是这些分量因子的乘
         // 1. 距离反比损耗
+        // tips:当一个各向同性天线（Isotropic Antenna）向外辐射能量时，其波阵面是以源为球心的球面,随着波向外传播，相同的能量被均匀分散在越来越大的球面上面积。因此，单位面积上的功率密度（Power Density）与距离的平方成反比,代码设置了 50 米的最小保底距离防止除以 0，然后直接套用了球面波功率衰减的基本物理公式
         const d = computedDistance > 0 ? computedDistance : 50.0;
         const attenuation_dist = 1 / (4 * Math.PI * Math.pow(d, 2));
 
         // 2. 自由空间高程损耗
+        // tips:基于高度的代数衰减模型（洛伦兹函数形式）,在特定的电磁传播环境（如地面波、低空信道或特定垂直极化场景）中，信号强度可能与海拔高度 alt 相关，该公式采用的是一个典型的类似于洛伦兹函数 (Lorentzian-like function) 或二阶低通滤波器的数学响应曲线，当 alt = 0 时，函数值为 1。当 alt = ±100 时，函数值为 \(1 / (1 + 1) = 0.5\)（曲线的半高宽处）。当 alt = ±200 时，函数值为 \(1 / (1 + 4) = 0.2\)。当 alt = ±300 时，函数值为 \(1 / (1 + 9) = 0.1\)。形成一个钟形曲线
         const alt = asset.alt || 0.1;
         const attenuation_alt = 1 / (1 + Math.pow(alt / 100, 2));
 
         // 3. 地形遮蔽损耗
+        // tips:无线电波在视距（LOS, Line of Sight）传播时介质较为单一，而当地形存在建筑物、树木或山体等障碍物时，会发生反射、折射和吸收,layer === 0` 极可能代表地面层/地表资产。由于地表环境复杂，电波容易受到建筑物、植被、地面起伏的阻挡，因此人为引入一个 0.75 的恒定衰减系数,非地面层（例如空中、太空资产，`layer !== 0`）被视作拥有通透的自由空间视距，因此衰减系数为1（无地形遮蔽损耗）。
         const attenuation_terrain = asset.layer === 0 ? 0.75 : 1.0;
 
         // 4. 多普勒频移损耗
+        // tips:多普勒效应导致的接收端失配损耗，当发射端与接收端存在高速相对运动时，接收到的电磁波频率会发生偏移，即多普勒频移,频率的偏移会导致接收端的带通滤波器、解调器或相位锁相环发生非相干失配,layer === 2` 往往代表高空/太空高速运动层（如卫星或超音速战机）。由于其运动速度极快，多普勒频移显著，所以在未进行精确多普勒补偿的情况下，人为给它施加了 0.85 的衰减系数作为性能惩罚。慢速或静态图层（如地面、常规低空资产）则忽略此频移损耗（系数为 1）
         const attenuation_vel = asset.layer === 2 ? 0.85 : 1.0;
 
         // 5. 天线偏角折损
+        // tips:真实天线都具有方向性图 (Radiation Pattern)，只有当发射天线和接收天线的最大增益轴（波束主瓣中心）精确对准时，增益才最高,在实际工作或运动中，由于设备抖动、姿态变化（Attitude Pitch/Yaw/Roll）或追踪不及时，天线指向往往存在微小的偏角（Offset Angle），且存在极化失配（Polarization Mismatch）。程序没有去实时计算复杂的 3D 向量夹角和天线增益方向图，而是采用了一个固定的安全余量（Link Margin）来模拟由于姿态不稳和偏角带来的平均能量折损
         const attenuation_att = 0.9;
 
         // 解算最终有效干信比 (J/S Ratio)
-        // 假定干扰开机基准功率为 3000W，蓝方通信基准功率为 0.05W，并考虑通信链路基准距离的自由空间损耗以计算接收端功率
+        // 假定干扰开机基准功率为 3000W，蓝方通信基准功率为 0.05W,并考虑通信链路基准距离的自由空间损耗以计算接收端功率
         const P_jam = 3000;
         const d_sig = 600.0;
         const P_sig_recv = 0.05 / (4 * Math.PI * Math.pow(d_sig, 2));
@@ -471,8 +477,8 @@ function autoAllocateWeapons(
           // ① 更新当前时刻受影响链路状态
           db.exec({
             sql: `
-              UPDATE communication_windows 
-              SET link_status = ? 
+              UPDATE communication_windows
+              SET link_status = ?
               WHERE scenario_id = ? AND ? BETWEEN window_start AND window_end
                 AND (source_id = ? OR target_id = ?)
             `,
@@ -487,8 +493,8 @@ function autoAllocateWeapons(
             //    （节点已被物理消灭，其后续通信窗口不可能恢复）
             db.exec({
               sql: `
-                UPDATE communication_windows 
-                SET link_status = 'DESTROYED' 
+                UPDATE communication_windows
+                SET link_status = 'DESTROYED'
                 WHERE scenario_id = ? AND window_start > ?
                   AND (source_id = ? OR target_id = ?)
                   AND link_status != 'DESTROYED'
@@ -517,7 +523,7 @@ function autoAllocateWeapons(
           const destroyedAdded = selectedWeapon.kill_type === "HARD" ? 1 : 0;
           db.exec({
             sql: `
-              UPDATE tactical_plans 
+              UPDATE tactical_plans
               SET total_cost = total_cost + ?,
                   total_delay_achieved = total_delay_achieved + ?,
                   nodes_destroyed = nodes_destroyed + ?
@@ -686,7 +692,7 @@ function generateMatrices(scenarioId: string): TacticalMatrices {
       FROM communication_windows cw
       JOIN assets a1 ON cw.source_id = a1.id
       JOIN assets a2 ON cw.target_id = a2.id
-      WHERE cw.scenario_id = ? 
+      WHERE cw.scenario_id = ?
         AND ((a1.layer = 2 AND a2.layer = 1) OR (a1.layer = 1 AND a2.layer = 0))
       ORDER BY a1.layer DESC, cw.source_id, cw.target_id
     `,
