@@ -63,6 +63,7 @@ export type KillType = 'SOFT' | 'HARD';
  * 'TRANSMITTING':'通信中'
  * 'JAMMED':'被干扰'
  * 'DESTROYED':'被摧毁'
+ * 'ENGAGEMENT':'最短时效链路'
  */
 export type LinkStatus = 'PENDING' | 'TRANSMITTING' | 'JAMMED' | 'DESTROYED' | 'ENGAGEMENT';
 
@@ -176,95 +177,95 @@ export interface Engagement {
  * 时间窗口结构体
  */
 export interface TimeWindow {
-  window_start: number;
-  window_end: number;
+  window_start: number; //时间窗口开始时间
+  window_end: number; //时间窗口结束时间
 }
 
 /**
  * 7. 算法矩阵——1. 空间卫星过境矩阵项
  */
 export interface PassMatrixItem {
-  sat_id: string;
-  sat_name: string;
-  windows: TimeWindow[];
+  sat_id: string; //卫星ID
+  sat_name: string; //卫星名称
+  windows: TimeWindow[]; //时间窗口
 }
 
 /**
  * 7. 算法矩阵——2. 星地通视矩阵项
  */
 export interface VisibleMatrixItem {
-  source_id: string;
-  source_name: string;
-  target_id: string;
-  target_name: string;
-  windows: TimeWindow[];
+  source_id: string; //起点ID
+  source_name: string; //起点名称
+  target_id: string; //终点ID
+  target_name: string; //终点名称
+  windows: TimeWindow[]; //时间窗口
 }
 
 /**
  * 7. 算法矩阵——3. 传输时延开销 Tick 明细
  */
 export interface OverheadMatrixTick {
-  time: number;
-  tick_min: number;
-  status: LinkStatus | string;
-  trans_delay: number;
-  proc_delay: number;
-  extra_delay: number;
-  total_overhead: number;
+  time: number; //信号开始传输时刻（秒）
+  tick_min: number; //分钟数
+  status: LinkStatus | string; //链路状态
+  trans_delay: number; //传输延迟（秒）
+  proc_delay: number; //处理延迟（秒）
+  extra_delay: number; //额外延迟（秒）
+  total_overhead: number; //总开销（秒）
 }
 
 /**
  * 7. 算法矩阵——3. 传输时延开销压缩时间段
  */
 export interface OverheadMatrixSegment {
-  start_min: number;
-  end_min: number;
-  status: LinkStatus | string;
-  trans_delay: number;
-  proc_delay: number;
-  extra_delay: number;
-  total_overhead: number;
+  start_min: number; //开始时间（分钟）
+  end_min: number; //结束时间（分钟）
+  status: LinkStatus | string; //链路状态
+  trans_delay: number; //传输延迟（秒）
+  proc_delay: number; //处理延迟（秒）
+  extra_delay: number; //额外延迟（秒）
+  total_overhead: number; //总开销（秒）
 }
 
 /**
  * 7. 算法矩阵——3. 传输时延矩阵项
  */
 export interface OverheadMatrixItem {
-  source_id: string;
-  source_name: string;
-  source_layer: BattlefieldLayer;
-  target_id: string;
-  target_name: string;
-  target_layer: BattlefieldLayer;
-  link_type: 'SAT_TO_STATION' | 'STATION_TO_CMD';
-  trans_delay: number;
-  proc_delay: number;
-  extra_delay: number;
-  total_overhead: number;
-  link_status: LinkStatus;
-  avg_overhead: number;
-  max_overhead: number;
-  min_overhead: number;
-  ticks: OverheadMatrixTick[];
-  segments: OverheadMatrixSegment[];
+  source_id: string; //起点资产ID
+  source_name: string; //起点资产名称
+  source_layer: BattlefieldLayer; //起点资产所处兵力层级
+  target_id: string; //终点资产ID
+  target_name: string; //终点资产名称
+  target_layer: BattlefieldLayer; //终点资产所处兵力层级
+  link_type: 'SAT_TO_STATION' | 'STATION_TO_CMD'; //链路类型（卫星到地面/地面到指挥中心）
+  trans_delay: number; //传输延迟（秒）
+  proc_delay: number; //处理延迟（秒）
+  extra_delay: number; //额外延迟（秒）
+  total_overhead: number; //总开销（秒）
+  link_status: LinkStatus; //链路状态
+  avg_overhead: number;  //平均开销（秒）
+  max_overhead: number; //最大开销（秒）
+  min_overhead: number; //最小开销（秒）
+  ticks: OverheadMatrixTick[]; //时延开销明细
+  segments: OverheadMatrixSegment[]; //时延开销压缩时间段
 }
 
 /**
  * 7. 算法矩阵——4. 武器打击矩阵项
  */
 export interface AttackMatrixItem {
-  weapon_id: string;
-  weapon_name: string;
-  category: WeaponCategory;
-  kill_type: KillType;
-  target_id: string;
-  target_name: string;
-  target_layer: BattlefieldLayer;
-  theoretical_delay: number;
-  actual_delay: number;
-  is_executed: boolean;
-  action_cost: number;
-  windows: TimeWindow[];
+  weapon_id: string; //武器ID
+  weapon_name: string; //武器名称
+  category: WeaponCategory; //武器分类
+  kill_type: KillType; //毁伤性质
+  target_id: string; //目标ID
+  target_name: string; //目标名称
+  target_layer: BattlefieldLayer; //目标所处兵力层级
+  theoretical_delay: number; //理论延迟（秒）
+  actual_delay: number; //实际延迟（秒）
+  is_executed: boolean; //是否执行
+  action_cost: number; //动作代价
+  windows: TimeWindow[]; //时间窗口
 }
 
 /**
@@ -347,10 +348,10 @@ export interface EarliestFullChainAnalysis {
  * 四大全域战术算法矩阵集合
  */
 export interface TacticalMatrices {
-  passMatrix: PassMatrixItem[];
-  visibleMatrix: VisibleMatrixItem[];
-  overheadMatrix: OverheadMatrixItem[];
-  attackMatrix: AttackMatrixItem[];
+  passMatrix: PassMatrixItem[]; //卫星过境矩阵
+  visibleMatrix: VisibleMatrixItem[]; //星地通视矩阵
+  overheadMatrix: OverheadMatrixItem[]; //传输时延开销矩阵
+  attackMatrix: AttackMatrixItem[]; //武器打击矩阵
 
   /** 蓝方最早完成一次全链路传输分析解算结果 */
   earliestFullChain?: EarliestFullChainAnalysis;
@@ -360,53 +361,53 @@ export interface TacticalMatrices {
  * 3D 拓扑图节点类型
  */
 export interface GraphNode extends Partial<Asset> {
-  id: string;
-  name?: string;
-  x?: number;
-  y?: number;
-  z?: number;
-  vx?: number;
-  vy?: number;
-  vz?: number;
-  fx?: number | null;
-  fy?: number | null;
-  fz?: number | null;
-  __threeObj?: unknown;
+  id: string; //节点ID
+  name?: string; //节点名称
+  x?: number; //X轴坐标
+  y?: number; //Y轴坐标
+  z?: number; //Z轴坐标
+  vx?: number; //X轴速度
+  vy?: number; //Y轴速度
+  vz?: number; //Z轴速度
+  fx?: number | null; //X轴力
+  fy?: number | null; //Y轴力
+  fz?: number | null; //Z轴力
+  __threeObj?: unknown; //三维对象
 }
 
 /**
  * 3D 拓扑图连线类型
  */
 export interface GraphLink {
-  id: string;
-  source: string | GraphNode;
-  target: string | GraphNode;
-  window_start: number;
-  window_end: number;
-  routing_converge_delay: number;
-  link_status: LinkStatus;
-  scenario_id?: string;
-  source_id?: string;
-  target_id?: string;
+  id: string; //连线ID
+  source: string | GraphNode; //源节点
+  target: string | GraphNode; //目标节点
+  window_start: number; //时间窗口开始时间
+  window_end: number; //时间窗口结束时间
+  routing_converge_delay: number; //路由收敛延迟
+  link_status: LinkStatus; //链路状态
+  scenario_id?: string; //场景ID
+  source_id?: string; //源节点ID
+  target_id?: string; //目标节点ID
 }
 
 /**
  * 武器智能打击分配矩阵行
  */
 export interface WeaponAssignmentRow {
-  weapon_id: string;
-  weapon_name: string;
-  weapon_category: WeaponCategory;
-  kill_type: KillType;
-  action_cost: number;
-  max_range: number;
-  window_id: string;
-  target_source_id: string;
-  target_dest_id: string;
-  window_start: number;
-  window_end: number;
-  theoretical_delay: number;
-  cost_benefit_ratio: number;
-  recommended: boolean;
+  weapon_id: string; //武器ID
+  weapon_name: string; //武器名称
+  weapon_category: WeaponCategory; //武器分类
+  kill_type: KillType; //毁伤性质
+  action_cost: number; //动作代价
+  max_range: number; //最大射程
+  window_id: string; //时间窗口ID
+  target_source_id: string; //目标源ID
+  target_dest_id: string; //目标终点ID
+  window_start: number; //时间窗口开始时间
+  window_end: number; //时间窗口结束时间
+  theoretical_delay: number; //理论延迟（秒）
+  cost_benefit_ratio: number;  //性价比
+  recommended: boolean; //是否推荐
 }
 

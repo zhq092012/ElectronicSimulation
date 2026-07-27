@@ -938,6 +938,27 @@ function generateMatrices(scenarioId: string): TacticalMatrices {
   });
 
   // 6. 解算 earliestFullChain (蓝方最早完成一次全链路传输分析及武器影响归因)
+  // 贪心算法：遍历所有可能的卫星发射时刻 t0 和对应的“时延路径”，找到导致“最终到达时间”最早的那一条链路。然后，在“发射”到“到达”这个时间窗口内，回溯所有成功的干扰/打击，计算延迟增量。
+  /**
+   * overheadMatrix
+    │
+    ├── SAT_TO_STATION links ─┐
+    │                         ├─ 双层嵌套遍历 × 每个tick
+    └── STATION_TO_CMD links ─┘
+              │
+              ▼
+        时序计算：t0 → t1 → finishTime
+              │
+              ▼ 贪心选择 minFinishTime
+        bestCombination（最优链路+时刻）
+              │
+              ▼
+        SQL查询武器打击归因
+              │
+              ▼
+        earliestFullChain（最终结果）
+
+   */
   let earliestFullChain: EarliestFullChainAnalysis | undefined = undefined;
   try {
     const satToStationLinks = overheadMatrix.filter(item => item.link_type === 'SAT_TO_STATION');
@@ -955,64 +976,68 @@ function generateMatrices(scenarioId: string): TacticalMatrices {
       callback: (r: any) => { assetNameMap.set(r.id, r.id); }
     });
 
+    //寻找在受到干扰/打压后，实际最早完成全链路传输的最佳链路组合与发射时刻 t0
     let bestCombination: {
-      optimalStartTime: number;
-      earliestFinishTime: number;
-      totalBaselineOverhead: number;
-      actualDelay: number;
-      pathNodes: string[];
-      pathNodeNames: string[];
-      pathLinkIds: string[];
-      satLink: OverheadMatrixItem;
-      stationLink: OverheadMatrixItem;
+      optimalStartTime: number; //最佳发射时刻 t0
+      earliestFinishTime: number; //最早完成时间
+      totalBaselineOverhead: number; //总基准开销
+      actualDelay: number; //实际延迟
+      pathNodes: string[]; //节点路径
+      pathNodeNames: string[]; //节点名称路径
+      pathLinkIds: string[]; //链路ID路径
+      satLink: OverheadMatrixItem; //卫星链路
+      stationLink: OverheadMatrixItem; //地面链路
     } | null = null;
 
-    let minFinishTime = Infinity;
+    let minFinishTime = Infinity; //最小完成时间
 
     // 寻找在受到干扰/打压后，实际最早完成全链路传输的最佳链路组合与发射时刻 t0
     satToStationLinks.forEach(satLink => {
       stationToCmdLinks.forEach(stationLink => {
         // 匹配地面接收站节点衔接: Sat -> Station 且 Station -> Cmd
         if (satLink.target_id === stationLink.source_id) {
-          const baseline1 = satLink.trans_delay + satLink.proc_delay;
-          const baseline2 = stationLink.trans_delay + stationLink.proc_delay;
-          const totalBaselineOverhead = baseline1 + baseline2;
+          const baseline1 = satLink.trans_delay + satLink.proc_delay; //第一跳基准开销
+          const baseline2 = stationLink.trans_delay + stationLink.proc_delay; //第二跳基准开销
+          const totalBaselineOverhead = baseline1 + baseline2; //总基准开销
 
           for (let i = 0; i < satLink.ticks.length; i++) {
-            const tick1 = satLink.ticks[i];
-            const t0 = tick1.time;
-            const delay1 = tick1.total_overhead;
-            const t1 = t0 + delay1;
-
-            // 匹配第二跳在 t1 时刻处的时延开销
+            const tick1 = satLink.ticks[i]; //第i跳时延开销明细
+            const t0 = tick1.time; //信号发射时刻（候选最优出发点）
+            const delay1 = tick1.total_overhead; //第一跳实际时延（含干扰影响）
+            const t1 = t0 + delay1; //信号到达接收站的时刻
+            // 用 t1 反算出第二跳在 t1 时刻对应的时延索引
+            // 关键设计：第二跳的时延不是固定的，而是取 信号到达接收站那一刻 (t1) 对应的时延值。这模拟了真实场景：干扰强度随时间变化，早发晚发会遇到不同的干扰环境。
+            // 这是将连续时刻 t1 映射到离散 tick 数组索引的标准公式，并做了边界 clamp 防止越界
             const tick2Index = Math.min(
               stationLink.ticks.length - 1,
               Math.max(0, Math.floor((t1 - start_time) / time_step_seconds))
             );
-            const tick2 = stationLink.ticks[tick2Index];
-            const delay2 = tick2 ? tick2.total_overhead : baseline2;
-            const actualDelay = delay1 + delay2;
-            const finishTime = t0 + actualDelay;
+            const tick2 = stationLink.ticks[tick2Index]; //第二跳在 t1 时刻的实际时延开销明细
+            const delay2 = tick2 ? tick2.total_overhead : baseline2; //第二跳实际时延（含干扰影响）
+            const actualDelay = delay1 + delay2; //全链路实际总延迟
+            const finishTime = t0 + actualDelay; //信号到达指挥中心的时刻
 
+            // 贪心选择最优解 每次找到更早完成的组合就更新 bestCombination，最终保留全局最优的那一条。
             if (finishTime < minFinishTime) {
               minFinishTime = finishTime;
-              const satName = assetNameMap.get(satLink.source_id) || satLink.source_id;
-              const stationName = assetNameMap.get(satLink.target_id) || satLink.target_id;
-              const cmdName = assetNameMap.get(stationLink.target_id) || stationLink.target_id;
+              const satName = assetNameMap.get(satLink.source_id) || satLink.source_id; //卫星名称
+              const stationName = assetNameMap.get(satLink.target_id) || satLink.target_id; //接收站名称
+              const cmdName = assetNameMap.get(stationLink.target_id) || stationLink.target_id; //指挥中心名称
 
+              //记录完成时间最早的全链路组合
               bestCombination = {
-                optimalStartTime: t0,
-                earliestFinishTime: finishTime,
-                totalBaselineOverhead,
-                actualDelay,
-                pathNodes: [satLink.source_id, satLink.target_id, stationLink.target_id],
-                pathNodeNames: [satName, stationName, cmdName],
+                optimalStartTime: t0, //信号发射时刻（候选最优出发点）
+                earliestFinishTime: finishTime, //信号到达指挥中心的时刻
+                totalBaselineOverhead, //总基准开销
+                actualDelay, //实际延迟
+                pathNodes: [satLink.source_id, satLink.target_id, stationLink.target_id], //节点路径
+                pathNodeNames: [satName, stationName, cmdName], //节点名称路径
                 pathLinkIds: [
-                  `${satLink.source_id}::${satLink.target_id}`,
-                  `${stationLink.source_id}::${stationLink.target_id}`
+                  `${satLink.source_id}::${satLink.target_id}`, //链路ID路径
+                  `${stationLink.source_id}::${stationLink.target_id}` //链路ID路径
                 ],
-                satLink,
-                stationLink
+                satLink, //卫星链路
+                stationLink //地面链路
               };
             }
           }
@@ -1020,6 +1045,7 @@ function generateMatrices(scenarioId: string): TacticalMatrices {
       });
     });
 
+    // 如果存在完成时间最早的全链路组合，则进行武器影响归因分析
     if (bestCombination) {
       const {
         optimalStartTime,
@@ -1031,10 +1057,11 @@ function generateMatrices(scenarioId: string): TacticalMatrices {
         pathLinkIds
       } = bestCombination;
 
-      const delayDelta = actualDelay - totalBaselineOverhead;
-      const attributions: FullChainAttribution[] = [];
+      const delayDelta = actualDelay - totalBaselineOverhead; //延迟增量
+      const attributions: FullChainAttribution[] = []; //武器影响归因列表
 
-      // 从 engagements 中检索落在该全链路传输时间窗口内的成功武器打击记录
+      // 检索落在该全链路传输时间窗口内的成功武器打击记录
+      // 找到最优链路后，查询在 [optimalStartTime, earliestFinishTime] 时间窗口内，有哪些武器成功打击了该链路上的节点
       activeDb.exec({
         sql: `
           SELECT e.action_time, e.weapon_id, w.name as weapon_name, w.category, w.kill_type, cw.target_id, a.id as target_name
@@ -1049,53 +1076,54 @@ function generateMatrices(scenarioId: string): TacticalMatrices {
         bind: [optimalStartTime, earliestFinishTime, pathNodes[0], pathNodes[1]],
         rowMode: 'object',
         callback: (r: any) => {
-          const impact = r.kill_type === 'HARD' ? 300 : 45;
-          const targetName = assetNameMap.get(r.target_id) || r.target_id;
+          const impact = r.kill_type === 'HARD' ? 300 : 45; //每条命中记录会被计算一个 delay_impact（延迟影响值）
+          const targetName = assetNameMap.get(r.target_id) || r.target_id; //目标名称
           attributions.push({
-            time: r.action_time,
-            minute: Math.floor((r.action_time - start_time) / 60),
-            weapon_id: r.weapon_id,
-            weapon_name: r.weapon_name,
-            category: r.category as WeaponCategory,
-            kill_type: r.kill_type as KillType,
-            target_id: r.target_id,
-            target_name: targetName,
-            delay_impact: impact
+            time: r.action_time, //时间戳
+            minute: Math.floor((r.action_time - start_time) / 60), //分钟
+            weapon_id: r.weapon_id, //武器ID
+            weapon_name: r.weapon_name, //武器名称
+            category: r.category as WeaponCategory, //武器类型
+            kill_type: r.kill_type as KillType, //杀伤类型
+            target_id: r.target_id, //目标ID
+            target_name: targetName, //目标名称
+            delay_impact: impact //延迟影响
           });
         }
       });
 
-      const optimalStartMin = Math.floor((optimalStartTime - start_time) / 60);
-      const earliestFinishMin = Math.floor((earliestFinishTime - start_time) / 60);
-      const baselineFinishTime = optimalStartTime + totalBaselineOverhead;
-      const baselineFinishMin = Math.floor((baselineFinishTime - start_time) / 60);
+      const optimalStartMin = Math.floor((optimalStartTime - start_time) / 60); //最佳发射时刻（分钟）
+      const earliestFinishMin = Math.floor((earliestFinishTime - start_time) / 60); //最早完成时间（分钟）
+      const baselineFinishTime = optimalStartTime + totalBaselineOverhead; //基准完成时间
+      const baselineFinishMin = Math.floor((baselineFinishTime - start_time) / 60); //基准完成时间（分钟）
 
+      // 组装最早完成全链路
       earliestFullChain = {
-        optimalStartTime,
-        optimalStartMin,
-        earliestFinishTime,
-        earliestFinishMin,
-        baselineFinishTime,
-        baselineFinishMin,
-        totalBaselineOverhead,
-        actualDelay,
-        delayDelta,
-        pathNodes,
-        pathNodeNames,
-        pathLinkIds,
-        attributions
+        optimalStartTime, //最佳发射时刻
+        optimalStartMin, //最佳发射时刻（分钟）
+        earliestFinishTime, //最早完成时间
+        earliestFinishMin, //最早完成时间（分钟）
+        baselineFinishTime, //基准完成时间
+        baselineFinishMin, //基准完成时间（分钟）
+        totalBaselineOverhead, //总基准开销
+        actualDelay, //实际延迟
+        delayDelta, // delayDelta 是最核心的输出指标——它量化了电子对抗/火力打击对这条最优链路造成的额外延迟损耗。
+        pathNodes, //节点路径
+        pathNodeNames, //节点名称路径
+        pathLinkIds, //链路ID路径
+        attributions //武器影响归因列表
       };
     }
   } catch (err) {
-    console.error('Error calculating earliestFullChain:', err);
+    console.error('Error calculating earliestFullChain:', err); //错误日志
   }
 
   return {
-    passMatrix,
-    visibleMatrix,
-    overheadMatrix,
-    attackMatrix,
-    earliestFullChain
+    passMatrix, //通过矩阵
+    visibleMatrix, //可见矩阵
+    overheadMatrix, //开销矩阵
+    attackMatrix, //攻击矩阵
+    earliestFullChain //最早完成全链路
   };
 }
 
